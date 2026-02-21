@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getAvaxBalance } from './services/avalanche.js';
 import {
   House,
   Clock,
@@ -76,13 +77,23 @@ const BottomSheet = ({ isOpen, onClose, title, children }) => {
  * TAB COMPONENTS
  */
 
+const WALLET_ADDRESS = '0x3f4e9f0a4e6d7b8c9d0e1f2a3b4c5d6e7f8a2c';
+
 const WalletTab = () => {
   const [activeSubTab, setActiveSubTab] = useState('TOKENS');
   const [sheet, setSheet] = useState(null);
+  const [avaxBalance, setAvaxBalance] = useState(null);
+  const [balanceError, setBalanceError] = useState(false);
+
+  useEffect(() => {
+    getAvaxBalance(WALLET_ADDRESS)
+      .then(bal => setAvaxBalance(parseFloat(bal).toFixed(4)))
+      .catch(() => setBalanceError(true));
+  }, []);
 
   const tokens = [
     { name: 'Ethereum', symbol: 'ETH', balance: '8.42', fiat: '28,140', change: '+1.2%', chain: 'Avalanche C-Chain', icon: '💎', color: 'from-blue-500' },
-    { name: 'Avalanche', symbol: 'AVAX', balance: '210', fiat: '9,870', change: '-0.8%', chain: 'Avalanche', icon: '🔺', color: 'from-red-500' },
+    { name: 'Avalanche', symbol: 'AVAX', balance: avaxBalance ?? '…', fiat: null, change: '-0.8%', chain: 'Avalanche', icon: '🔺', color: 'from-red-500' },
     { name: 'USD Coin', symbol: 'USDC', balance: '6,500', fiat: '6,500', change: '0.0%', chain: 'Dexalot L1', icon: '💵', color: 'from-blue-400' },
     { name: 'Trader Joe', symbol: 'JOE', balance: '4,200', fiat: '2,100', change: '+4.3%', chain: 'Avalanche', icon: '🍌', color: 'from-orange-400' },
     { name: 'Off The Grid', symbol: 'OTG', balance: '18,000', fiat: '980', change: '+12.1%', chain: 'Gunzilla L1', icon: '🔫', color: 'from-zinc-400' },
@@ -100,9 +111,16 @@ const WalletTab = () => {
     <div className="pt-12 pb-24 px-6 space-y-8 animate-in fade-in zoom-in-95 duration-500">
       {/* Header */}
       <div className="text-center space-y-2">
-        <p className="text-white/60 text-sm font-medium uppercase tracking-widest">Total Balance</p>
-        <h1 className="text-5xl font-bold text-white tracking-tight">$48,291.34</h1>
-        <p className="text-green-400 font-medium">+$1,204.21 (2.56%) today</p>
+        <p className="text-white/60 text-sm font-medium uppercase tracking-widest">AVAX Balance · Fuji</p>
+        <h1 className="text-5xl font-bold text-white tracking-tight">
+          {balanceError
+            ? <span className="text-red-400 text-2xl">Failed to load</span>
+            : avaxBalance === null
+              ? <span className="text-white/30 animate-pulse">Loading…</span>
+              : <>{avaxBalance} <span className="text-3xl text-white/60">AVAX</span></>
+          }
+        </h1>
+        <p className="text-white/40 font-medium text-sm">Avalanche Fuji Testnet</p>
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full mt-4 active:bg-white/10 transition-colors">
           <span className="text-white/60 text-xs font-mono">0x3f4...8a2c</span>
           <Copy size={12} className="text-white/40" />
@@ -162,8 +180,8 @@ const WalletTab = () => {
                 <div className="flex justify-between text-xs font-medium">
                   <span className="text-white/40">{t.chain}</span>
                   <div className="flex gap-2">
-                    <span className="text-white/60">${t.fiat}</span>
-                    <span className={t.change.startsWith('+') ? 'text-green-400' : 'text-red-400'}>{t.change}</span>
+                    {t.fiat !== null && <span className="text-white/60">${t.fiat}</span>}
+                    <span className={t.change.startsWith('+') ? 'text-green-400' : t.change.startsWith('-') ? 'text-red-400' : 'text-white/40'}>{t.change}</span>
                   </div>
                 </div>
               </div>
