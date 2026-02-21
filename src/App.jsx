@@ -77,7 +77,7 @@ const BottomSheet = ({ isOpen, onClose, title, children }) => {
  * TAB COMPONENTS
  */
 
-const WALLET_ADDRESS = '0x3f4e9f0a4e6d7b8c9d0e1f2a3b4c5d6e7f8a2c';
+const WALLET_ADDRESS = '0x59BCCC78CbE0BfBCd266BB22e55C87074117A4C0';
 
 const WalletTab = () => {
   const [activeSubTab, setActiveSubTab] = useState('TOKENS');
@@ -122,7 +122,7 @@ const WalletTab = () => {
         </h1>
         <p className="text-white/40 font-medium text-sm">Avalanche Fuji Testnet</p>
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full mt-4 active:bg-white/10 transition-colors">
-          <span className="text-white/60 text-xs font-mono">0x3f4...8a2c</span>
+          <span className="text-white/60 text-xs font-mono">0x59B...A4C0</span>
           <Copy size={12} className="text-white/40" />
         </div>
       </div>
@@ -346,7 +346,7 @@ const ProfileTab = () => {
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight">Electric</h2>
           <div className="flex items-center gap-2 mt-1 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
-            <span className="text-[10px] font-mono text-white/40">0x3f4e...8a2c</span>
+            <span className="text-[10px] font-mono text-white/40">0x59BC...A4C0</span>
             <Copy size={10} className="text-white/20" />
           </div>
         </div>
