@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getAvaxBalance } from './services/avalanche.js';
+import { getTokenPrices } from './services/coingecko.js';
 import {
   House,
   Clock,
@@ -83,22 +84,45 @@ const WalletTab = () => {
   const [activeSubTab, setActiveSubTab] = useState('TOKENS');
   const [sheet, setSheet] = useState(null);
   const [avaxBalance, setAvaxBalance] = useState(null);
-  const [balanceError, setBalanceError] = useState(false);
+  const [prices, setPrices] = useState(null);
 
   useEffect(() => {
     getAvaxBalance(WALLET_ADDRESS)
-      .then(bal => setAvaxBalance(parseFloat(bal).toFixed(4)))
-      .catch(() => setBalanceError(true));
+      .then(bal => setAvaxBalance(parseFloat(bal)))
+      .catch(() => {});
+    getTokenPrices()
+      .then(setPrices)
+      .catch(() => setPrices({}));
   }, []);
 
+  // Returns the live USD value for a token, or null if unavailable.
+  const fiatValue = (coinGeckoId, rawBalance) => {
+    if (!prices || rawBalance == null) return null;
+    const price = prices[coinGeckoId]?.usd;
+    return price != null ? rawBalance * price : null;
+  };
+
+  const formatFiat = (value) => {
+    if (value == null) return null;
+    return value >= 1000
+      ? value.toLocaleString('en-US', { maximumFractionDigits: 0 })
+      : value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   const tokens = [
-    { name: 'Ethereum', symbol: 'ETH', balance: '8.42', fiat: '28,140', change: '+1.2%', chain: 'Avalanche C-Chain', icon: '💎', color: 'from-blue-500' },
-    { name: 'Avalanche', symbol: 'AVAX', balance: avaxBalance ?? '…', fiat: null, change: '-0.8%', chain: 'Avalanche', icon: '🔺', color: 'from-red-500' },
-    { name: 'USD Coin', symbol: 'USDC', balance: '6,500', fiat: '6,500', change: '0.0%', chain: 'Dexalot L1', icon: '💵', color: 'from-blue-400' },
-    { name: 'Trader Joe', symbol: 'JOE', balance: '4,200', fiat: '2,100', change: '+4.3%', chain: 'Avalanche', icon: '🍌', color: 'from-orange-400' },
-    { name: 'Off The Grid', symbol: 'OTG', balance: '18,000', fiat: '980', change: '+12.1%', chain: 'Gunzilla L1', icon: '🔫', color: 'from-zinc-400' },
-    { name: 'Starknet', symbol: 'STRK', balance: '890', fiat: '701', change: '-2.1%', chain: 'Avalanche', icon: '🐺', color: 'from-indigo-600' },
+    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: 8.42,        coinGeckoId: 'ethereum',     displayBalance: '8.42',                           change: '+1.2%', chain: 'Avalanche C-Chain', icon: '💎', color: 'from-blue-500' },
+    { name: 'Avalanche',  symbol: 'AVAX', rawBalance: avaxBalance,  coinGeckoId: 'avalanche-2',  displayBalance: avaxBalance != null ? avaxBalance.toFixed(4) : '…', change: '-0.8%', chain: 'Avalanche',       icon: '🔺', color: 'from-red-500' },
+    { name: 'USD Coin',   symbol: 'USDC', rawBalance: 6500,         coinGeckoId: 'usd-coin',     displayBalance: '6,500',                          change: '0.0%',  chain: 'Dexalot L1',       icon: '💵', color: 'from-blue-400' },
+    { name: 'Trader Joe', symbol: 'JOE',  rawBalance: 4200,         coinGeckoId: 'trader-joe-2', displayBalance: '4,200',                          change: '+4.3%', chain: 'Avalanche',         icon: '🍌', color: 'from-orange-400' },
+    { name: 'Off The Grid', symbol: 'OTG', rawBalance: 18000,       coinGeckoId: null,           displayBalance: '18,000',  staticFiat: '980',     change: '+12.1%', chain: 'Gunzilla L1',     icon: '🔫', color: 'from-zinc-400' },
+    { name: 'Starknet',   symbol: 'STRK', rawBalance: 890,          coinGeckoId: null,           displayBalance: '890',     staticFiat: '701',     change: '-2.1%', chain: 'Avalanche',         icon: '🐺', color: 'from-indigo-600' },
   ];
+
+  // Portfolio total: sum of all tokens with a known USD value.
+  const portfolioTotal = tokens.reduce((sum, t) => {
+    const v = t.coinGeckoId ? fiatValue(t.coinGeckoId, t.rawBalance) : parseFloat(t.staticFiat ?? 0);
+    return sum + (v ?? 0);
+  }, 0);
 
   const nfts = [
     { name: "NXT Genesis #042", floor: "12.4 AVAX", chain: "Avalanche", color: "from-pink-500 to-purple-500" },
@@ -111,13 +135,11 @@ const WalletTab = () => {
     <div className="pt-12 pb-24 px-6 space-y-8 animate-in fade-in zoom-in-95 duration-500">
       {/* Header */}
       <div className="text-center space-y-2">
-        <p className="text-white/60 text-sm font-medium uppercase tracking-widest">AVAX Balance · Fuji</p>
+        <p className="text-white/60 text-sm font-medium uppercase tracking-widest">Portfolio Value</p>
         <h1 className="text-5xl font-bold text-white tracking-tight">
-          {balanceError
-            ? <span className="text-red-400 text-2xl">Failed to load</span>
-            : avaxBalance === null
-              ? <span className="text-white/30 animate-pulse">Loading…</span>
-              : <>{avaxBalance} <span className="text-3xl text-white/60">AVAX</span></>
+          {prices === null
+            ? <span className="text-white/30 animate-pulse">Loading…</span>
+            : <><span className="text-3xl text-white/60">$</span>{portfolioTotal.toLocaleString('en-US', { maximumFractionDigits: 0 })}</>
           }
         </h1>
         <p className="text-white/40 font-medium text-sm">Avalanche Fuji Testnet</p>
@@ -164,29 +186,38 @@ const WalletTab = () => {
       {/* Content */}
       <div className="space-y-3">
         {activeSubTab === 'TOKENS' ? (
-          tokens.map((t, i) => (
-            <GlassCard key={i} className="p-4 flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${t.color} flex items-center justify-center text-xl relative shadow-lg`}>
-                {t.icon}
-                <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-black border border-white/20 flex items-center justify-center text-[8px]">
-                  {t.chain.includes('Avalanche') ? '🔺' : '⛓️'}
-                </div>
-              </div>
-              <div className="flex-1">
-                <div className="flex justify-between">
-                  <span className="font-bold text-white">{t.name}</span>
-                  <span className="font-bold text-white">{t.balance} {t.symbol}</span>
-                </div>
-                <div className="flex justify-between text-xs font-medium">
-                  <span className="text-white/40">{t.chain}</span>
-                  <div className="flex gap-2">
-                    {t.fiat !== null && <span className="text-white/60">${t.fiat}</span>}
-                    <span className={t.change.startsWith('+') ? 'text-green-400' : t.change.startsWith('-') ? 'text-red-400' : 'text-white/40'}>{t.change}</span>
+          tokens.map((t, i) => {
+            const liveFiat = t.coinGeckoId ? fiatValue(t.coinGeckoId, t.rawBalance) : null;
+            const displayFiat = liveFiat != null ? formatFiat(liveFiat) : t.staticFiat ?? null;
+            return (
+              <GlassCard key={i} className="p-4 flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${t.color} flex items-center justify-center text-xl relative shadow-lg`}>
+                  {t.icon}
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-black border border-white/20 flex items-center justify-center text-[8px]">
+                    {t.chain.includes('Avalanche') ? '🔺' : '⛓️'}
                   </div>
                 </div>
-              </div>
-            </GlassCard>
-          ))
+                <div className="flex-1">
+                  <div className="flex justify-between">
+                    <span className="font-bold text-white">{t.name}</span>
+                    <span className="font-bold text-white">{t.displayBalance} {t.symbol}</span>
+                  </div>
+                  <div className="flex justify-between text-xs font-medium">
+                    <span className="text-white/40">{t.chain}</span>
+                    <div className="flex gap-2">
+                      {displayFiat != null
+                        ? <span className="text-white/60">${displayFiat}</span>
+                        : prices === null && t.coinGeckoId
+                          ? <span className="text-white/30 animate-pulse text-[10px]">…</span>
+                          : null
+                      }
+                      <span className={t.change.startsWith('+') ? 'text-green-400' : t.change.startsWith('-') ? 'text-red-400' : 'text-white/40'}>{t.change}</span>
+                    </div>
+                  </div>
+                </div>
+              </GlassCard>
+            );
+          })
         ) : (
           <div className="grid grid-cols-2 gap-4">
             {nfts.map((n, i) => (
