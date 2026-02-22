@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getAvaxBalance, getSepoliaBalance, getEchoBalance, getDispatchBalance, getDexalotBalance } from './services/avalanche.js';
+import { getAvaxBalance, getSepoliaBalance, getEchoBalance, getDispatchBalance, getDexalotBalance, getPChainBalance, getXChainBalance } from './services/avalanche.js';
 import { getTokenPrices } from './services/coingecko.js';
 import {
   House,
@@ -21,6 +21,8 @@ import {
   CheckCircle2,
   X,
   Plus,
+  Globe,
+  AlertTriangle,
 } from 'lucide-react';
 
 /** * GLOBAL DESIGN SYSTEM & COMPONENTS
@@ -80,6 +82,21 @@ const BottomSheet = ({ isOpen, onClose, title, children }) => {
 const WALLET_ADDRESS = '0xb3020c5b33538A879C89C69392208C72ec3BFEf1';
 const WALLET_ADDRESS_PX = 'fuji1w4zlzvd54vsjz3a8yxkks5tpjk88nl27uw3xgh';
 
+const RPC = {
+  testnet: {
+    avax:    'https://api.avax-test.network/ext/bc/C/rpc',
+    eth:     'https://ethereum-sepolia-rpc.publicnode.com',
+    pChain:  'https://api.avax-test.network/ext/bc/P',
+    xChain:  'https://api.avax-test.network/ext/bc/X',
+  },
+  mainnet: {
+    avax:    'https://api.avax.network/ext/bc/C/rpc',
+    eth:     'https://eth.llamarpc.com',
+    pChain:  'https://api.avax.network/ext/bc/P',
+    xChain:  'https://api.avax.network/ext/bc/X',
+  },
+};
+
 
 const NETWORKS = [
   { id: 'all',            label: 'All Chains' },
@@ -90,7 +107,7 @@ const NETWORKS = [
   { id: 'dexalot',        label: 'Dexalot' },
 ];
 
-const WalletTab = () => {
+const WalletTab = ({ isMainnet }) => {
   const [activeSubTab, setActiveSubTab] = useState('TOKENS');
   const [activeNetwork, setActiveNetwork] = useState('all');
   const [sheet, setSheet] = useState(null);
@@ -99,15 +116,22 @@ const WalletTab = () => {
   const [echoBalance, setEchoBalance] = useState(null);
   const [dispatchBalance, setDispatchBalance] = useState(null);
   const [dexalotBalance, setDexalotBalance] = useState(null);
+  const [pChainBalance, setPChainBalance] = useState(null);
+  const [xChainBalance, setXChainBalance] = useState(null);
   const [prices, setPrices] = useState(null);
 
   useEffect(() => {
-    getAvaxBalance(WALLET_ADDRESS)
+    const net = isMainnet ? RPC.mainnet : RPC.testnet;
+    setAvaxBalance(null);
+    setSepoliaBalance(null);
+    setPChainBalance(null);
+    setXChainBalance(null);
+    getAvaxBalance(WALLET_ADDRESS, net.avax)
       .then(bal => setAvaxBalance(parseFloat(bal)))
       .catch(() => {});
-    getSepoliaBalance(WALLET_ADDRESS)
+    getSepoliaBalance(WALLET_ADDRESS, net.eth)
       .then(bal => setSepoliaBalance(parseFloat(bal)))
-      .catch(err => console.error('[Sepolia] balance fetch failed:', err));
+      .catch(err => console.error('[ETH] balance fetch failed:', err));
     getEchoBalance(WALLET_ADDRESS)
       .then(bal => setEchoBalance(parseFloat(bal)))
       .catch(() => {});
@@ -117,10 +141,16 @@ const WalletTab = () => {
     getDexalotBalance(WALLET_ADDRESS)
       .then(bal => setDexalotBalance(parseFloat(bal)))
       .catch(() => {});
+    getPChainBalance(WALLET_ADDRESS_PX, net.pChain)
+      .then(bal => setPChainBalance(parseFloat(bal)))
+      .catch(() => {});
+    getXChainBalance(WALLET_ADDRESS_PX, net.xChain)
+      .then(bal => setXChainBalance(parseFloat(bal)))
+      .catch(() => {});
     getTokenPrices()
       .then(setPrices)
       .catch(() => setPrices({}));
-  }, []);
+  }, [isMainnet]);
 
   // Returns the live USD value for a token, or null if unavailable.
   const fiatValue = (coinGeckoId, rawBalance) => {
@@ -138,10 +168,12 @@ const WalletTab = () => {
 
   const tokens = [
     { name: 'Avalanche',  symbol: 'AVAX', rawBalance: avaxBalance,      coinGeckoId: 'avalanche-2', displayBalance: avaxBalance != null ? avaxBalance.toFixed(4) : '…',       change: '-0.8%', chain: 'Avalanche Fuji',     icon: '🔺', color: 'from-red-500',     network: 'avalanche-fuji' },
-    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: sepoliaBalance,   coinGeckoId: 'ethereum',    displayBalance: sepoliaBalance != null ? sepoliaBalance.toFixed(4) : '…', change: '+1.2%', chain: 'Sepolia Testnet',    icon: '💎', color: 'from-blue-400',    network: 'sepolia' },
+    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: sepoliaBalance,   coinGeckoId: 'ethereum',    displayBalance: sepoliaBalance != null ? sepoliaBalance.toFixed(4) : '…', change: '+1.2%', chain: isMainnet ? 'Ethereum Mainnet' : 'Sepolia Testnet', icon: '💎', color: 'from-blue-400',    network: 'sepolia' },
     { name: 'Echo',       symbol: 'ECHO', rawBalance: echoBalance,      coinGeckoId: null,           displayBalance: echoBalance != null ? echoBalance.toFixed(4) : '…',       change: '—',     chain: 'Dexalot Echo',       icon: '🔵', color: 'from-cyan-500',    network: 'echo' },
     { name: 'Dispatch',   symbol: 'DIS',  rawBalance: dispatchBalance,  coinGeckoId: null,           displayBalance: dispatchBalance != null ? dispatchBalance.toFixed(4) : '…', change: '—',   chain: 'Dexalot Dispatch',   icon: '🟣', color: 'from-violet-500',  network: 'dispatch' },
     { name: 'Dexalot',    symbol: 'ALOT', rawBalance: dexalotBalance,   coinGeckoId: null,           displayBalance: dexalotBalance != null ? dexalotBalance.toFixed(4) : '…', change: '—',    chain: 'Dexalot Subnet',     icon: '📈', color: 'from-blue-600',    network: 'dexalot' },
+    { name: 'AVAX (P)',   symbol: 'AVAX', rawBalance: pChainBalance,    coinGeckoId: 'avalanche-2',  displayBalance: pChainBalance != null ? pChainBalance.toFixed(4) : '…',   change: '-0.8%', chain: 'Avalanche P-Chain',  icon: '🔺', color: 'from-red-700',     network: 'avalanche-fuji' },
+    { name: 'AVAX (X)',   symbol: 'AVAX', rawBalance: xChainBalance,    coinGeckoId: 'avalanche-2',  displayBalance: xChainBalance != null ? xChainBalance.toFixed(4) : '…',   change: '-0.8%', chain: 'Avalanche X-Chain',  icon: '🔺', color: 'from-orange-600',  network: 'avalanche-fuji' },
   ];
 
   const visibleTokens = activeNetwork === 'all'
@@ -169,7 +201,7 @@ const WalletTab = () => {
         <h1 className="text-5xl font-bold text-white tracking-tight">
           {prices === null
             ? <span className="text-white/30 animate-pulse">Loading…</span>
-            : <><span className="text-3xl text-white/60">$</span>{portfolioTotal.toLocaleString('en-US', { maximumFractionDigits: 0 })}</>
+            : <><span className="text-3xl text-white/60">$</span>{portfolioTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
           }
         </h1>
         <p className="text-white/40 font-medium text-sm">
@@ -465,7 +497,7 @@ const DAppsTab = () => {
   );
 };
 
-const ProfileTab = () => {
+const ProfileTab = ({ isMainnet, onToggleNetwork }) => {
   const [faceId, setFaceId] = useState(true);
   const [rpcStealth, setRpcStealth] = useState(false);
   const [spamFilter, setSpamFilter] = useState(true);
@@ -486,6 +518,29 @@ const ProfileTab = () => {
           </div>
         </div>
       </div>
+
+      {/* Network Section */}
+      <section className="space-y-3">
+        <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest px-1">Network</h3>
+        <GlassCard className="overflow-hidden">
+          <div className="p-4 flex items-center gap-4">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isMainnet ? 'bg-green-500/10 text-green-400' : 'bg-white/5 text-white/40'}`}>
+              <Globe size={20} />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-white">Mainnet</h4>
+              <p className="text-[10px] text-white/40">{isMainnet ? 'Connected to real networks' : 'Using test networks'}</p>
+            </div>
+            <Toggle enabled={isMainnet} onChange={onToggleNetwork} />
+          </div>
+          {isMainnet && (
+            <div className="mx-4 mb-4 px-3 py-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-2.5">
+              <AlertTriangle size={14} className="text-amber-400 flex-shrink-0" />
+              <p className="text-[11px] text-amber-300 font-semibold">You are now using real funds</p>
+            </div>
+          )}
+        </GlassCard>
+      </section>
 
       {/* Security Section */}
       <section className="space-y-3">
@@ -627,6 +682,13 @@ const ProfileTab = () => {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('wallet');
+  const [isMainnet, setIsMainnet] = useState(() => localStorage.getItem('networkMode') === 'mainnet');
+
+  const handleToggleNetwork = () => {
+    const next = !isMainnet;
+    setIsMainnet(next);
+    localStorage.setItem('networkMode', next ? 'mainnet' : 'testnet');
+  };
 
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500/30 flex items-center justify-center overflow-hidden">
@@ -646,10 +708,10 @@ export default function App() {
 
         {/* Dynamic Content */}
         <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
-          {activeTab === 'wallet' && <WalletTab />}
+          {activeTab === 'wallet' && <WalletTab isMainnet={isMainnet} />}
           {activeTab === 'activity' && <ActivityTab />}
           {activeTab === 'dapps' && <DAppsTab />}
-          {activeTab === 'profile' && <ProfileTab />}
+          {activeTab === 'profile' && <ProfileTab isMainnet={isMainnet} onToggleNetwork={handleToggleNetwork} />}
         </div>
 
         {/* Floating Tab Bar */}
