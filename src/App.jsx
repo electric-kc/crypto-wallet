@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getAvaxBalance, getSepoliaBalance, getEchoBalance, getDispatchBalance, getDexalotBalance } from './services/avalanche.js';
 import { getTokenPrices } from './services/coingecko.js';
 import {
@@ -11,17 +11,16 @@ import {
   ArrowLeftRight,
   Link as LinkIcon,
   Copy,
-  Search,
-  ExternalLink,
   Shield,
   Hand,
+  ChevronLeft,
   ChevronRight,
   Monitor,
   Smartphone,
   Tablet,
   CheckCircle2,
   X,
-  Plus
+  Plus,
 } from 'lucide-react';
 
 /** * GLOBAL DESIGN SYSTEM & COMPONENTS
@@ -78,7 +77,9 @@ const BottomSheet = ({ isOpen, onClose, title, children }) => {
  * TAB COMPONENTS
  */
 
-const WALLET_ADDRESS = '0x59BCCC78CbE0BfBCd266BB22e55C87074117A4C0';
+const WALLET_ADDRESS = '0xb3020c5b33538A879C89C69392208C72ec3BFEf1';
+const WALLET_ADDRESS_PX = 'fuji1w4zlzvd54vsjz3a8yxkks5tpjk88nl27uw3xgh';
+
 
 const NETWORKS = [
   { id: 'all',            label: 'All Chains' },
@@ -175,7 +176,7 @@ const WalletTab = () => {
           {NETWORKS.find(n => n.id === activeNetwork)?.label ?? 'All Networks'}
         </p>
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full mt-4 active:bg-white/10 transition-colors">
-          <span className="text-white/60 text-xs font-mono">0x59B...A4C0</span>
+          <span className="text-white/60 text-xs font-mono">0xb302...FEf1</span>
           <Copy size={12} className="text-white/40" />
         </div>
 
@@ -355,57 +356,112 @@ const ActivityTab = () => {
 };
 
 const DAppsTab = () => {
+  const [browserUrl, setBrowserUrl] = useState(null);
+  const iframeRef = useRef(null);
+
   const favorites = [
-    { name: 'Dexalot', color: 'from-blue-600 to-cyan-500', icon: '📈' },
-    { name: 'Trader Joe', color: 'from-orange-500 to-yellow-500', icon: '🍌' },
-    { name: 'Off The Grid', color: 'from-zinc-800 to-red-900', icon: '🎯' },
-    { name: 'Uniswap', color: 'from-pink-500 to-purple-500', icon: '🦄' },
+    { name: 'Dexalot', url: 'https://app.dexalot.com/swap', color: 'from-blue-600 to-cyan-500', icon: '📈' },
+    { name: 'Uniswap', url: 'https://app.uniswap.org', color: 'from-pink-500 to-purple-500', icon: '🦄' },
   ];
 
+  const curated = [
+    {
+      name: 'Dexalot',
+      url: 'https://app.dexalot.com/swap',
+      description: 'Non-custodial order-book DEX on Avalanche',
+      gradient: 'from-blue-600 to-cyan-500',
+      icon: '📈',
+    },
+    {
+      name: 'Uniswap',
+      url: 'https://app.uniswap.org',
+      description: 'The leading decentralized exchange',
+      gradient: 'from-pink-500 to-rose-500',
+      icon: '🦄',
+    },
+  ];
+
+  const goBack = () => {
+    try { iframeRef.current?.contentWindow?.history?.back(); } catch (e) {}
+  };
+
   return (
-    <div className="pt-12 pb-24 px-6 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" size={18} />
-        <input
-          placeholder="Search dApps or paste URL"
-          className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-sm focus:outline-none focus:border-white/20 transition-all"
-        />
+    <>
+      <div className="pt-12 pb-24 px-6 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+
+        {/* Favorites banner */}
+        <section className="space-y-4">
+          <h3 className="text-lg font-bold text-white/80 px-1">Favorites</h3>
+          <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+            {favorites.map((fav, i) => (
+              <div key={i} className="flex-shrink-0 w-40 space-y-3 cursor-pointer" onClick={() => setBrowserUrl(fav.url)}>
+                <div className={`h-24 w-full rounded-2xl bg-gradient-to-br ${fav.color} flex items-center justify-center text-3xl shadow-lg active:scale-95 transition-transform`}>
+                  {fav.icon}
+                </div>
+                <p className="text-xs font-bold text-white text-center">{fav.name}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Featured dApp cards */}
+        <section className="space-y-4">
+          <h3 className="text-lg font-bold text-white/80 px-1">Featured</h3>
+          <div className="space-y-3">
+            {curated.map((d, i) => (
+              <GlassCard key={i} className="p-4 flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${d.gradient} flex items-center justify-center text-2xl shadow-lg flex-shrink-0`}>
+                  {d.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-bold text-white">{d.name}</h4>
+                  <p className="text-[10px] text-white/40 mt-0.5 leading-relaxed">{d.description}</p>
+                </div>
+                <button
+                  onClick={() => setBrowserUrl(d.url)}
+                  className="flex-shrink-0 px-4 py-2 bg-gradient-to-r from-[#6C63FF] to-[#A855F7] rounded-xl text-[11px] font-bold text-white shadow-lg shadow-purple-500/20 active:scale-95 transition-transform"
+                >
+                  Launch
+                </button>
+              </GlassCard>
+            ))}
+          </div>
+        </section>
       </div>
 
-      <section className="space-y-4">
-        <h3 className="text-lg font-bold text-white/80 px-1">Favorites</h3>
-        <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-          {favorites.map((fav, i) => (
-            <div key={i} className="flex-shrink-0 w-40 space-y-3">
-              <div className={`h-24 w-full rounded-2xl bg-gradient-to-br ${fav.color} flex items-center justify-center text-3xl shadow-lg`}>
-                {fav.icon}
-              </div>
-              <p className="text-xs font-bold text-white text-center">{fav.name}</p>
+      {/* In-app browser modal */}
+      {browserUrl && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-[#050510]">
+          {/* Top bar */}
+          <div className="flex items-center gap-3 px-4 pt-12 pb-3 bg-white/5 border-b border-white/10 flex-shrink-0">
+            <button
+              onClick={goBack}
+              className="p-2 rounded-full bg-white/5 active:bg-white/10 transition-colors flex-shrink-0"
+            >
+              <ChevronLeft size={20} className="text-white" />
+            </button>
+            <div className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5">
+              <span className="text-xs text-white/60 font-mono truncate block">{browserUrl}</span>
             </div>
-          ))}
+            <button
+              onClick={() => setBrowserUrl(null)}
+              className="p-2 rounded-full bg-white/5 active:bg-white/10 transition-colors flex-shrink-0"
+            >
+              <X size={20} className="text-white" />
+            </button>
+          </div>
+          {/* iframe */}
+          <iframe
+            ref={iframeRef}
+            src={browserUrl}
+            className="flex-1 w-full border-0"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            allow="accelerometer; camera; encrypted-media; geolocation; gyroscope"
+            title="dApp Browser"
+          />
         </div>
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex justify-between items-center px-1">
-          <h3 className="text-lg font-bold text-white/80">Popular</h3>
-          <button className="text-xs font-bold text-[#A855F7]">See All</button>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          {['Aave', 'GMX', 'OpenSea', 'Stargate'].map((d, i) => (
-            <GlassCard key={i} className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl">
-                {['👻', '🫐', '⛵', '✨'][i]}
-              </div>
-              <div>
-                <p className="text-xs font-bold text-white">{d}</p>
-                <p className="text-[10px] text-green-400 font-medium">Connected</p>
-              </div>
-            </GlassCard>
-          ))}
-        </div>
-      </section>
-    </div>
+      )}
+    </>
   );
 };
 
@@ -425,7 +481,7 @@ const ProfileTab = () => {
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight">Electric</h2>
           <div className="flex items-center gap-2 mt-1 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
-            <span className="text-[10px] font-mono text-white/40">0x59BC...A4C0</span>
+            <span className="text-[10px] font-mono text-white/40">0xb302...FEf1</span>
             <Copy size={10} className="text-white/20" />
           </div>
         </div>
@@ -573,15 +629,18 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('wallet');
 
   return (
-    <div className="min-h-screen bg-[#050510] text-white font-sans selection:bg-purple-500/30 overflow-hidden flex justify-center">
-      {/* Background Gradients */}
+    <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500/30 flex items-center justify-center overflow-hidden">
+      {/* Background Gradients (fixed, behind the frame) */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#6C63FF]/10 blur-[120px] rounded-full" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#A855F7]/10 blur-[120px] rounded-full" />
       </div>
 
-      {/* Mobile Wrapper */}
-      <div className="relative w-full max-w-md h-screen overflow-hidden flex flex-col">
+      {/* Mobile Frame — phone bezel, centered on any screen */}
+      <div
+        className="relative bg-[#050510] flex flex-col"
+        style={{ width: '100vw', height: '100vh', maxWidth: '390px', maxHeight: '844px', margin: 'auto', borderRadius: '40px', overflow: 'hidden' }}
+      >
         {/* Safe Area Top */}
         <div className="h-12 w-full flex-shrink-0" />
 
