@@ -80,8 +80,15 @@ const BottomSheet = ({ isOpen, onClose, title, children }) => {
 
 const WALLET_ADDRESS = '0x59BCCC78CbE0BfBCd266BB22e55C87074117A4C0';
 
+const NETWORKS = [
+  { id: 'all',            label: 'All Chains' },
+  { id: 'avalanche-fuji', label: 'Avax Fuji' },
+  { id: 'sepolia',        label: 'Sepolia' },
+];
+
 const WalletTab = () => {
   const [activeSubTab, setActiveSubTab] = useState('TOKENS');
+  const [activeNetwork, setActiveNetwork] = useState('all');
   const [sheet, setSheet] = useState(null);
   const [avaxBalance, setAvaxBalance] = useState(null);
   const [sepoliaBalance, setSepoliaBalance] = useState(null);
@@ -114,17 +121,21 @@ const WalletTab = () => {
   };
 
   const tokens = [
-    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: 8.42,           coinGeckoId: 'ethereum',     displayBalance: '8.42',                                                    change: '+1.2%', chain: 'Avalanche C-Chain', icon: '💎', color: 'from-blue-500' },
-    { name: 'Avalanche',  symbol: 'AVAX', rawBalance: avaxBalance,     coinGeckoId: 'avalanche-2',  displayBalance: avaxBalance != null ? avaxBalance.toFixed(4) : '…',         change: '-0.8%', chain: 'Avalanche',         icon: '🔺', color: 'from-red-500' },
-    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: sepoliaBalance,  coinGeckoId: 'ethereum',     displayBalance: sepoliaBalance != null ? sepoliaBalance.toFixed(4) : '…',   change: '+1.2%', chain: 'Sepolia Testnet',   icon: '💎', color: 'from-blue-400' },
-    { name: 'USD Coin',   symbol: 'USDC', rawBalance: 6500,         coinGeckoId: 'usd-coin',     displayBalance: '6,500',                          change: '0.0%',  chain: 'Dexalot L1',       icon: '💵', color: 'from-blue-400' },
-    { name: 'Trader Joe', symbol: 'JOE',  rawBalance: 4200,         coinGeckoId: 'trader-joe-2', displayBalance: '4,200',                          change: '+4.3%', chain: 'Avalanche',         icon: '🍌', color: 'from-orange-400' },
-    { name: 'Off The Grid', symbol: 'OTG', rawBalance: 18000,       coinGeckoId: null,           displayBalance: '18,000',  staticFiat: '980',     change: '+12.1%', chain: 'Gunzilla L1',     icon: '🔫', color: 'from-zinc-400' },
-    { name: 'Starknet',   symbol: 'STRK', rawBalance: 890,          coinGeckoId: null,           displayBalance: '890',     staticFiat: '701',     change: '-2.1%', chain: 'Avalanche',         icon: '🐺', color: 'from-indigo-600' },
+    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: 8.42,           coinGeckoId: 'ethereum',     displayBalance: '8.42',                                                    change: '+1.2%', chain: 'Avalanche C-Chain', icon: '💎', color: 'from-blue-500',   network: 'avalanche-fuji' },
+    { name: 'Avalanche',  symbol: 'AVAX', rawBalance: avaxBalance,     coinGeckoId: 'avalanche-2',  displayBalance: avaxBalance != null ? avaxBalance.toFixed(4) : '…',         change: '-0.8%', chain: 'Avalanche',         icon: '🔺', color: 'from-red-500',    network: 'avalanche-fuji' },
+    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: sepoliaBalance,  coinGeckoId: 'ethereum',     displayBalance: sepoliaBalance != null ? sepoliaBalance.toFixed(4) : '…',   change: '+1.2%', chain: 'Sepolia Testnet',   icon: '💎', color: 'from-blue-400',   network: 'sepolia' },
+    { name: 'USD Coin',   symbol: 'USDC', rawBalance: 6500,            coinGeckoId: 'usd-coin',     displayBalance: '6,500',                          change: '0.0%',  chain: 'Dexalot L1',       icon: '💵', color: 'from-blue-400',   network: 'avalanche-fuji' },
+    { name: 'Trader Joe', symbol: 'JOE',  rawBalance: 4200,            coinGeckoId: 'trader-joe-2', displayBalance: '4,200',                          change: '+4.3%', chain: 'Avalanche',         icon: '🍌', color: 'from-orange-400', network: 'avalanche-fuji' },
+    { name: 'Off The Grid', symbol: 'OTG', rawBalance: 18000,          coinGeckoId: null,           displayBalance: '18,000',  staticFiat: '980',     change: '+12.1%', chain: 'Gunzilla L1',     icon: '🔫', color: 'from-zinc-400',   network: 'avalanche-fuji' },
+    { name: 'Starknet',   symbol: 'STRK', rawBalance: 890,             coinGeckoId: null,           displayBalance: '890',     staticFiat: '701',     change: '-2.1%', chain: 'Avalanche',         icon: '🐺', color: 'from-indigo-600', network: 'avalanche-fuji' },
   ];
 
-  // Portfolio total: sum of all tokens with a known USD value.
-  const portfolioTotal = tokens.reduce((sum, t) => {
+  const visibleTokens = activeNetwork === 'all'
+    ? tokens
+    : tokens.filter(t => t.network === activeNetwork);
+
+  // Portfolio total: sum of visible tokens with a known USD value.
+  const portfolioTotal = visibleTokens.reduce((sum, t) => {
     const v = t.coinGeckoId ? fiatValue(t.coinGeckoId, t.rawBalance) : parseFloat(t.staticFiat ?? 0);
     return sum + (v ?? 0);
   }, 0);
@@ -147,10 +158,29 @@ const WalletTab = () => {
             : <><span className="text-3xl text-white/60">$</span>{portfolioTotal.toLocaleString('en-US', { maximumFractionDigits: 0 })}</>
           }
         </h1>
-        <p className="text-white/40 font-medium text-sm">Avalanche Fuji Testnet</p>
+        <p className="text-white/40 font-medium text-sm">
+          {activeNetwork === 'all' ? 'All Networks' : activeNetwork === 'avalanche-fuji' ? 'Avalanche Fuji' : 'Sepolia Testnet'}
+        </p>
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full mt-4 active:bg-white/10 transition-colors">
           <span className="text-white/60 text-xs font-mono">0x59B...A4C0</span>
           <Copy size={12} className="text-white/40" />
+        </div>
+
+        {/* Network Switcher */}
+        <div className="flex bg-white/5 border border-white/10 rounded-2xl p-1 mt-4">
+          {NETWORKS.map(net => (
+            <button
+              key={net.id}
+              onClick={() => setActiveNetwork(net.id)}
+              className={`flex-1 py-2 px-2 text-[10px] font-black rounded-xl transition-all duration-200 whitespace-nowrap ${
+                activeNetwork === net.id
+                  ? 'bg-gradient-to-r from-[#6C63FF] to-[#A855F7] text-white shadow-lg shadow-purple-500/20'
+                  : 'text-white/40'
+              }`}
+            >
+              {net.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -191,7 +221,7 @@ const WalletTab = () => {
       {/* Content */}
       <div className="space-y-3">
         {activeSubTab === 'TOKENS' ? (
-          tokens.map((t, i) => {
+          visibleTokens.map((t, i) => {
             const liveFiat = t.coinGeckoId ? fiatValue(t.coinGeckoId, t.rawBalance) : null;
             const displayFiat = liveFiat != null ? formatFiat(liveFiat) : t.staticFiat ?? null;
             return (
