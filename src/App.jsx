@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAvaxBalance } from './services/avalanche.js';
+import { getAvaxBalance, getSepoliaBalance } from './services/avalanche.js';
 import { getTokenPrices } from './services/coingecko.js';
 import {
   House,
@@ -84,11 +84,15 @@ const WalletTab = () => {
   const [activeSubTab, setActiveSubTab] = useState('TOKENS');
   const [sheet, setSheet] = useState(null);
   const [avaxBalance, setAvaxBalance] = useState(null);
+  const [sepoliaBalance, setSepoliaBalance] = useState(null);
   const [prices, setPrices] = useState(null);
 
   useEffect(() => {
     getAvaxBalance(WALLET_ADDRESS)
       .then(bal => setAvaxBalance(parseFloat(bal)))
+      .catch(() => {});
+    getSepoliaBalance(WALLET_ADDRESS)
+      .then(bal => setSepoliaBalance(parseFloat(bal)))
       .catch(() => {});
     getTokenPrices()
       .then(setPrices)
@@ -110,8 +114,9 @@ const WalletTab = () => {
   };
 
   const tokens = [
-    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: 8.42,        coinGeckoId: 'ethereum',     displayBalance: '8.42',                           change: '+1.2%', chain: 'Avalanche C-Chain', icon: '💎', color: 'from-blue-500' },
-    { name: 'Avalanche',  symbol: 'AVAX', rawBalance: avaxBalance,  coinGeckoId: 'avalanche-2',  displayBalance: avaxBalance != null ? avaxBalance.toFixed(4) : '…', change: '-0.8%', chain: 'Avalanche',       icon: '🔺', color: 'from-red-500' },
+    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: 8.42,           coinGeckoId: 'ethereum',     displayBalance: '8.42',                                                    change: '+1.2%', chain: 'Avalanche C-Chain', icon: '💎', color: 'from-blue-500' },
+    { name: 'Avalanche',  symbol: 'AVAX', rawBalance: avaxBalance,     coinGeckoId: 'avalanche-2',  displayBalance: avaxBalance != null ? avaxBalance.toFixed(4) : '…',         change: '-0.8%', chain: 'Avalanche',         icon: '🔺', color: 'from-red-500' },
+    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: sepoliaBalance,  coinGeckoId: 'ethereum',     displayBalance: sepoliaBalance != null ? sepoliaBalance.toFixed(4) : '…',   change: '+1.2%', chain: 'Sepolia Testnet',   icon: '💎', color: 'from-blue-400' },
     { name: 'USD Coin',   symbol: 'USDC', rawBalance: 6500,         coinGeckoId: 'usd-coin',     displayBalance: '6,500',                          change: '0.0%',  chain: 'Dexalot L1',       icon: '💵', color: 'from-blue-400' },
     { name: 'Trader Joe', symbol: 'JOE',  rawBalance: 4200,         coinGeckoId: 'trader-joe-2', displayBalance: '4,200',                          change: '+4.3%', chain: 'Avalanche',         icon: '🍌', color: 'from-orange-400' },
     { name: 'Off The Grid', symbol: 'OTG', rawBalance: 18000,       coinGeckoId: null,           displayBalance: '18,000',  staticFiat: '980',     change: '+12.1%', chain: 'Gunzilla L1',     icon: '🔫', color: 'from-zinc-400' },
