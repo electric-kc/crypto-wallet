@@ -490,6 +490,7 @@ const DAppsTab = () => {
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             allow="accelerometer; camera; encrypted-media; geolocation; gyroscope"
             title="dApp Browser"
+
           />
         </div>
       )}
