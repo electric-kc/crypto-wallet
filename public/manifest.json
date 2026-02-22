@@ -1,0 +1,16 @@
+{
+  "name": "NXT Wallet",
+  "short_name": "NXT",
+  "display": "standalone",
+  "start_url": "/",
+  "background_color": "#050510",
+  "theme_color": "#050510",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
