@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAvaxBalance, getSepoliaBalance } from './services/avalanche.js';
+import { getAvaxBalance, getSepoliaBalance, getEchoBalance, getDispatchBalance, getDexalotBalance } from './services/avalanche.js';
 import { getTokenPrices } from './services/coingecko.js';
 import {
   House,
@@ -84,6 +84,9 @@ const NETWORKS = [
   { id: 'all',            label: 'All Chains' },
   { id: 'avalanche-fuji', label: 'Avax Fuji' },
   { id: 'sepolia',        label: 'Sepolia' },
+  { id: 'echo',           label: 'Echo' },
+  { id: 'dispatch',       label: 'Dispatch' },
+  { id: 'dexalot',        label: 'Dexalot' },
 ];
 
 const WalletTab = () => {
@@ -92,6 +95,9 @@ const WalletTab = () => {
   const [sheet, setSheet] = useState(null);
   const [avaxBalance, setAvaxBalance] = useState(null);
   const [sepoliaBalance, setSepoliaBalance] = useState(null);
+  const [echoBalance, setEchoBalance] = useState(null);
+  const [dispatchBalance, setDispatchBalance] = useState(null);
+  const [dexalotBalance, setDexalotBalance] = useState(null);
   const [prices, setPrices] = useState(null);
 
   useEffect(() => {
@@ -100,6 +106,15 @@ const WalletTab = () => {
       .catch(() => {});
     getSepoliaBalance(WALLET_ADDRESS)
       .then(bal => setSepoliaBalance(parseFloat(bal)))
+      .catch(err => console.error('[Sepolia] balance fetch failed:', err));
+    getEchoBalance(WALLET_ADDRESS)
+      .then(bal => setEchoBalance(parseFloat(bal)))
+      .catch(() => {});
+    getDispatchBalance(WALLET_ADDRESS)
+      .then(bal => setDispatchBalance(parseFloat(bal)))
+      .catch(() => {});
+    getDexalotBalance(WALLET_ADDRESS)
+      .then(bal => setDexalotBalance(parseFloat(bal)))
       .catch(() => {});
     getTokenPrices()
       .then(setPrices)
@@ -121,13 +136,11 @@ const WalletTab = () => {
   };
 
   const tokens = [
-    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: 8.42,           coinGeckoId: 'ethereum',     displayBalance: '8.42',                                                    change: '+1.2%', chain: 'Avalanche C-Chain', icon: '💎', color: 'from-blue-500',   network: 'avalanche-fuji' },
-    { name: 'Avalanche',  symbol: 'AVAX', rawBalance: avaxBalance,     coinGeckoId: 'avalanche-2',  displayBalance: avaxBalance != null ? avaxBalance.toFixed(4) : '…',         change: '-0.8%', chain: 'Avalanche',         icon: '🔺', color: 'from-red-500',    network: 'avalanche-fuji' },
-    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: sepoliaBalance,  coinGeckoId: 'ethereum',     displayBalance: sepoliaBalance != null ? sepoliaBalance.toFixed(4) : '…',   change: '+1.2%', chain: 'Sepolia Testnet',   icon: '💎', color: 'from-blue-400',   network: 'sepolia' },
-    { name: 'USD Coin',   symbol: 'USDC', rawBalance: 6500,            coinGeckoId: 'usd-coin',     displayBalance: '6,500',                          change: '0.0%',  chain: 'Dexalot L1',       icon: '💵', color: 'from-blue-400',   network: 'avalanche-fuji' },
-    { name: 'Trader Joe', symbol: 'JOE',  rawBalance: 4200,            coinGeckoId: 'trader-joe-2', displayBalance: '4,200',                          change: '+4.3%', chain: 'Avalanche',         icon: '🍌', color: 'from-orange-400', network: 'avalanche-fuji' },
-    { name: 'Off The Grid', symbol: 'OTG', rawBalance: 18000,          coinGeckoId: null,           displayBalance: '18,000',  staticFiat: '980',     change: '+12.1%', chain: 'Gunzilla L1',     icon: '🔫', color: 'from-zinc-400',   network: 'avalanche-fuji' },
-    { name: 'Starknet',   symbol: 'STRK', rawBalance: 890,             coinGeckoId: null,           displayBalance: '890',     staticFiat: '701',     change: '-2.1%', chain: 'Avalanche',         icon: '🐺', color: 'from-indigo-600', network: 'avalanche-fuji' },
+    { name: 'Avalanche',  symbol: 'AVAX', rawBalance: avaxBalance,      coinGeckoId: 'avalanche-2', displayBalance: avaxBalance != null ? avaxBalance.toFixed(4) : '…',       change: '-0.8%', chain: 'Avalanche Fuji',     icon: '🔺', color: 'from-red-500',     network: 'avalanche-fuji' },
+    { name: 'Ethereum',   symbol: 'ETH',  rawBalance: sepoliaBalance,   coinGeckoId: 'ethereum',    displayBalance: sepoliaBalance != null ? sepoliaBalance.toFixed(4) : '…', change: '+1.2%', chain: 'Sepolia Testnet',    icon: '💎', color: 'from-blue-400',    network: 'sepolia' },
+    { name: 'Echo',       symbol: 'ECHO', rawBalance: echoBalance,      coinGeckoId: null,           displayBalance: echoBalance != null ? echoBalance.toFixed(4) : '…',       change: '—',     chain: 'Dexalot Echo',       icon: '🔵', color: 'from-cyan-500',    network: 'echo' },
+    { name: 'Dispatch',   symbol: 'DIS',  rawBalance: dispatchBalance,  coinGeckoId: null,           displayBalance: dispatchBalance != null ? dispatchBalance.toFixed(4) : '…', change: '—',   chain: 'Dexalot Dispatch',   icon: '🟣', color: 'from-violet-500',  network: 'dispatch' },
+    { name: 'Dexalot',    symbol: 'ALOT', rawBalance: dexalotBalance,   coinGeckoId: null,           displayBalance: dexalotBalance != null ? dexalotBalance.toFixed(4) : '…', change: '—',    chain: 'Dexalot Subnet',     icon: '📈', color: 'from-blue-600',    network: 'dexalot' },
   ];
 
   const visibleTokens = activeNetwork === 'all'
@@ -159,7 +172,7 @@ const WalletTab = () => {
           }
         </h1>
         <p className="text-white/40 font-medium text-sm">
-          {activeNetwork === 'all' ? 'All Networks' : activeNetwork === 'avalanche-fuji' ? 'Avalanche Fuji' : 'Sepolia Testnet'}
+          {NETWORKS.find(n => n.id === activeNetwork)?.label ?? 'All Networks'}
         </p>
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full mt-4 active:bg-white/10 transition-colors">
           <span className="text-white/60 text-xs font-mono">0x59B...A4C0</span>
@@ -167,12 +180,12 @@ const WalletTab = () => {
         </div>
 
         {/* Network Switcher */}
-        <div className="flex bg-white/5 border border-white/10 rounded-2xl p-1 mt-4">
+        <div className="flex bg-white/5 border border-white/10 rounded-2xl p-1 mt-4 overflow-x-auto no-scrollbar gap-1">
           {NETWORKS.map(net => (
             <button
               key={net.id}
               onClick={() => setActiveNetwork(net.id)}
-              className={`flex-1 py-2 px-2 text-[10px] font-black rounded-xl transition-all duration-200 whitespace-nowrap ${
+              className={`flex-shrink-0 py-2 px-3 text-[10px] font-black rounded-xl transition-all duration-200 whitespace-nowrap ${
                 activeNetwork === net.id
                   ? 'bg-gradient-to-r from-[#6C63FF] to-[#A855F7] text-white shadow-lg shadow-purple-500/20'
                   : 'text-white/40'
