@@ -638,11 +638,16 @@ const LockScreen = ({ keystoreEntry, onUnlock }) => {
 
 // ─── WALLET TAB ───────────────────────────────────────────────────────────────
 
-const WalletTab = ({ wallet }) => {
+const WalletTab = ({ wallet, mpcLastChecked }) => {
   const [activeSubTab, setActiveSubTab] = useState('TOKENS');
   const [sheet, setSheet] = useState(null);
   const [selectedChain, setSelectedChain] = useState(null);
   const [prices, setPrices] = useState(null);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(n => n + 1), 15_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     getTokenPrices().then(setPrices).catch(() => setPrices({}));
@@ -721,6 +726,24 @@ const WalletTab = ({ wallet }) => {
           </button>
         ))}
       </div>
+
+      {/* MPC provisioning status */}
+      {!MPC_CHAINS.every(c => wallet.mpcWallets?.[c.id]) && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-2xl">
+          <Loader size={12} className="animate-spin text-purple-400 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold text-purple-300">Provisioning MPC wallets…</p>
+            <p className="text-[10px] text-white/30">
+              {mpcLastChecked
+                ? `Last checked ${Math.round((Date.now() - mpcLastChecked) / 1000)}s ago · next in ${Math.max(0, 30 - Math.round((Date.now() - mpcLastChecked) / 1000))}s`
+                : 'Checking…'}
+            </p>
+          </div>
+          <span className="text-[10px] text-white/20 flex-shrink-0">
+            {MPC_CHAINS.filter(c => wallet.mpcWallets?.[c.id]).length}/{MPC_CHAINS.length}
+          </span>
+        </div>
+      )}
 
       {/* Content */}
       <div className="space-y-3">
@@ -1153,6 +1176,7 @@ export default function App() {
   const [wallet, setWallet] = useState(null);
   const sessionPrivKey = useRef(null);
   const [activeTab, setActiveTab] = useState('wallet');
+  const [mpcLastChecked, setMpcLastChecked] = useState(null);
 
   // Initialize: check for existing keystore
   useEffect(() => {
@@ -1227,12 +1251,13 @@ export default function App() {
     if (authState !== 'unlocked' || !wallet) return;
     const allReady = MPC_CHAINS.every(c => wallet.mpcWallets?.[c.id]);
     if (allReady) return;
-    const id = setInterval(async () => {
+    const poll = async () => {
       const mpcWallets = await getMPCWallets(wallet.address);
-      const nowReady = MPC_CHAINS.every(c => mpcWallets?.[c.id]);
+      setMpcLastChecked(new Date());
       setWallet(w => ({ ...w, mpcWallets }));
-      if (nowReady) clearInterval(id);
-    }, 30_000);
+    };
+    poll(); // check immediately on mount
+    const id = setInterval(poll, 30_000);
     return () => clearInterval(id);
   }, [authState, wallet?.address, MPC_CHAINS.every(c => wallet?.mpcWallets?.[c.id])]);
 
@@ -1325,7 +1350,7 @@ export default function App() {
       return (
         <>
           <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
-            {activeTab === 'wallet' && <WalletTab wallet={wallet} />}
+            {activeTab === 'wallet' && <WalletTab wallet={wallet} mpcLastChecked={mpcLastChecked} />}
             {activeTab === 'activity' && <ActivityTab />}
             {activeTab === 'dapps' && <DAppsTab />}
             {activeTab === 'profile' && <ProfileTab wallet={wallet} onLock={handleLock} onRemoveWallet={handleRemoveWallet} />}
