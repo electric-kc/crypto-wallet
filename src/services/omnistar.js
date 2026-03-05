@@ -7,7 +7,7 @@ export const LCD_URL = 'http://prod-full-1.omnistar.io:1317';
 export const API_SERVER_URL = 'https://reverse-proxy.omnistar.io/mainnet/proxy';
 const API_KEY = 'nft.r@bit2safe.wikey.io';
 export const FEE_DENOM = 'nost';
-export const FEE_AMOUNT = '5000';
+export const FEE_AMOUNT = '2200000'; // gas (200000) × gasPrice (11)
 export const GAS = '200000';
 export const OST_EXPONENT = 9; // 1 OST = 10^9 nost
 
