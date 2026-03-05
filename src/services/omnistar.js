@@ -7,8 +7,8 @@ export const LCD_URL = 'http://prod-full-1.omnistar.io:1317';
 export const API_SERVER_URL = 'https://reverse-proxy.omnistar.io/mainnet/proxy';
 const API_KEY = 'nft.r@bit2safe.wikey.io';
 export const FEE_DENOM = 'nost';
-export const FEE_AMOUNT = '2420000'; // gas (220000) × gasPrice (11)
-export const GAS = '220000';
+export const FEE_AMOUNT = '3300000'; // gas (300000) × gasPrice (11)
+export const GAS = '300000';
 export const OST_EXPONENT = 9; // 1 OST = 10^9 nost
 
 const USERNAME_RE = /^[a-zA-Z0-9]([a-zA-Z0-9.]*[a-zA-Z0-9])?$/;
@@ -38,10 +38,8 @@ export async function checkUsernameAvailability(username) {
 export async function getAccount(address) {
   try {
     const res = await fetch(`${LCD_URL}/cosmos/auth/v1beta1/accounts/${encodeURIComponent(address)}`);
-    console.log('[getAccount] status:', res.status);
     if (res.ok) {
       const data = await res.json();
-      console.log('[getAccount] data:', JSON.stringify(data));
       const acc = data?.account;
       return {
         accountNumber: parseInt(acc?.account_number ?? '0', 10),
@@ -239,14 +237,13 @@ function encodeAuthInfo(pubKeyBytes, sequence, signMode = 1) {
   return pbConcat(pbMsg(1, signerInfo), pbMsg(2, fee));
 }
 
-function encodeSignDoc(bodyBytes, authInfoBytes, chainId, accountNumber, sequence) {
-  // cosmos.tx.v1beta1.SignDoc
+function encodeSignDoc(bodyBytes, authInfoBytes, chainId, accountNumber) {
+  // Omnistar SignDoc: no sequence field (sequence is only in SignerInfo inside authInfoBytes)
   return pbConcat(
     pbByt(1, bodyBytes),
     pbByt(2, authInfoBytes),
     pbStr(3, chainId),
     pbUint(4, accountNumber),
-    pbUint(5, sequence),
   );
 }
 
@@ -295,8 +292,9 @@ export async function buildAndSign({ creator, username, pubKeyBase64, privKey })
   const authInfoBytes = encodeAuthInfo(pubKeyBytes, sequence, 1); // SIGN_MODE_DIRECT = 1
 
   // Sign the protobuf SignDoc (DIRECT mode — no Amino JSON reconstruction issues)
-  const signDocBytes = encodeSignDoc(bodyBytes, authInfoBytes, CHAIN_ID, accountNumber, sequence);
-  const sigBytes = secp256k1.sign(sha256(signDocBytes), privKey, { lowS: true }).toCompactRawBytes();
+  const signDocBytes = encodeSignDoc(bodyBytes, authInfoBytes, CHAIN_ID, accountNumber);
+  const signDocHash = sha256(signDocBytes);
+  const sigBytes = secp256k1.sign(signDocHash, privKey, { lowS: true }).toCompactRawBytes();
   const txRaw = pbConcat(pbByt(1, bodyBytes), pbByt(2, authInfoBytes), pbByt(3, sigBytes));
 
   return { signDoc, signature: txRaw, pubKey: btoa(String.fromCharCode(...pubKeyBytes)) };
