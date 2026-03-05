@@ -223,17 +223,28 @@ function encodeTxBody(msgs) {
   }
   return body;
 }
-function encodeAuthInfo(pubKeyBytes, sequence) {
-  // PubKey Any
+function encodeAuthInfo(pubKeyBytes, sequence, signMode = 1) {
+  // PubKey Any: /cosmos.crypto.secp256k1.PubKey { bytes key = 1; }
   const pk = pbConcat(pbStr(1, '/cosmos.crypto.secp256k1.PubKey'), pbByt(2, pbByt(1, pubKeyBytes)));
-  // ModeInfo { Single { mode = 127 (SIGN_MODE_LEGACY_AMINO_JSON) } }
-  const modeInfo = pbMsg(1, pbUint(1, 127));
+  // ModeInfo { Single { mode = signMode } }  1 = DIRECT, 127 = LEGACY_AMINO_JSON
+  const modeInfo = pbMsg(1, pbUint(1, signMode));
   // SignerInfo
   const signerInfo = pbConcat(pbMsg(1, pk), pbMsg(2, modeInfo), pbUint(3, sequence));
   // Fee { amount: [Coin{denom,amount}], gas_limit }
   const coin = pbConcat(pbStr(1, FEE_DENOM), pbStr(2, FEE_AMOUNT));
   const fee = pbConcat(pbMsg(1, coin), pbUint(2, parseInt(GAS, 10)));
   return pbConcat(pbMsg(1, signerInfo), pbMsg(2, fee));
+}
+
+function encodeSignDoc(bodyBytes, authInfoBytes, chainId, accountNumber, sequence) {
+  // cosmos.tx.v1beta1.SignDoc
+  return pbConcat(
+    pbByt(1, bodyBytes),
+    pbByt(2, authInfoBytes),
+    pbStr(3, chainId),
+    pbUint(4, accountNumber),
+    pbUint(5, sequence),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -274,18 +285,15 @@ export async function buildAndSign({ creator, username, pubKeyBase64, privKey })
   const { accountNumber, sequence } = await getAccount(creator);
   const signDoc = buildCreateSafeTx(creator, username, pubKeyBase64, accountNumber, sequence);
 
-  // Sign Amino JSON (SIGN_MODE_LEGACY_AMINO_JSON)
-  const sigBytes = (() => {
-    const canonical = JSON.stringify(sortObjectKeys(signDoc));
-    const hash = sha256(new TextEncoder().encode(canonical));
-    const sig = secp256k1.sign(hash, privKey, { lowS: true });
-    return sig.toCompactRawBytes();
-  })();
   const pubKeyBytes = secp256k1.getPublicKey(privKey, true);
 
-  // Build protobuf TxRaw for broadcast
+  // Build protobuf TxRaw components
   const bodyBytes = encodeTxBody(signDoc.msgs);
-  const authInfoBytes = encodeAuthInfo(pubKeyBytes, sequence);
+  const authInfoBytes = encodeAuthInfo(pubKeyBytes, sequence, 1); // SIGN_MODE_DIRECT = 1
+
+  // Sign the protobuf SignDoc (DIRECT mode — no Amino JSON reconstruction issues)
+  const signDocBytes = encodeSignDoc(bodyBytes, authInfoBytes, CHAIN_ID, accountNumber, sequence);
+  const sigBytes = secp256k1.sign(sha256(signDocBytes), privKey, { lowS: true }).toCompactRawBytes();
   const txRaw = pbConcat(pbByt(1, bodyBytes), pbByt(2, authInfoBytes), pbByt(3, sigBytes));
 
   return { signDoc, signature: txRaw, pubKey: btoa(String.fromCharCode(...pubKeyBytes)) };
