@@ -7,8 +7,9 @@ export const LCD_URL = 'http://prod-full-1.omnistar.io:1317';
 export const API_SERVER_URL = 'https://reverse-proxy.omnistar.io/mainnet/proxy';
 const API_KEY = 'nft.r@bit2safe.wikey.io';
 export const FEE_DENOM = 'nost';
-export const FEE_AMOUNT = '3300000'; // gas (300000) × gasPrice (11)
-export const GAS = '300000';
+export const GAS_PRICE = 11; // nost per gas unit
+export const GAS_FALLBACK = 300000; // used if simulation fails
+export const GAS_MULTIPLIER = 1.3; // 30% buffer on top of simulated gas
 export const OST_EXPONENT = 9; // 1 OST = 10^9 nost
 
 const USERNAME_RE = /^[a-zA-Z0-9]([a-zA-Z0-9.]*[a-zA-Z0-9])?$/;
@@ -224,7 +225,8 @@ function encodeTxBody(msgs) {
   }
   return body;
 }
-function encodeAuthInfo(pubKeyBytes, sequence, signMode = 1) {
+function encodeAuthInfo(pubKeyBytes, sequence, signMode = 1, gasLimit = GAS_FALLBACK) {
+  const feeAmount = String(gasLimit * GAS_PRICE);
   // PubKey Any: /cosmos.crypto.secp256k1.PubKey { bytes key = 1; }
   const pk = pbConcat(pbStr(1, '/cosmos.crypto.secp256k1.PubKey'), pbByt(2, pbByt(1, pubKeyBytes)));
   // ModeInfo { Single { mode = signMode } }  1 = DIRECT, 127 = LEGACY_AMINO_JSON
@@ -232,9 +234,27 @@ function encodeAuthInfo(pubKeyBytes, sequence, signMode = 1) {
   // SignerInfo
   const signerInfo = pbConcat(pbMsg(1, pk), pbMsg(2, modeInfo), pbUint(3, sequence));
   // Fee { amount: [Coin{denom,amount}], gas_limit }
-  const coin = pbConcat(pbStr(1, FEE_DENOM), pbStr(2, FEE_AMOUNT));
-  const fee = pbConcat(pbMsg(1, coin), pbUint(2, parseInt(GAS, 10)));
+  const coin = pbConcat(pbStr(1, FEE_DENOM), pbStr(2, feeAmount));
+  const fee = pbConcat(pbMsg(1, coin), pbUint(2, gasLimit));
   return pbConcat(pbMsg(1, signerInfo), pbMsg(2, fee));
+}
+
+async function simulateGas(bodyBytes, authInfoBytes) {
+  try {
+    const zeroSig = new Uint8Array(64);
+    const simTx = pbConcat(pbByt(1, bodyBytes), pbByt(2, authInfoBytes), pbByt(3, zeroSig));
+    const res = await fetch(`${LCD_URL}/cosmos/tx/v1beta1/simulate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tx_bytes: btoa(String.fromCharCode(...simTx)) }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const used = parseInt(data?.gas_info?.gas_used ?? '0', 10);
+      if (used > 0) return used;
+    }
+  } catch { /* fall through to default */ }
+  return null;
 }
 
 function encodeSignDoc(bodyBytes, authInfoBytes, chainId, accountNumber) {
@@ -286,12 +306,14 @@ export async function buildAndSign({ creator, username, pubKeyBase64, privKey })
   const signDoc = buildCreateSafeTx(creator, username, pubKeyBase64, accountNumber, sequence);
 
   const pubKeyBytes = secp256k1.getPublicKey(privKey, true);
-
-  // Build protobuf TxRaw components
   const bodyBytes = encodeTxBody(signDoc.msgs);
-  const authInfoBytes = encodeAuthInfo(pubKeyBytes, sequence, 1); // SIGN_MODE_DIRECT = 1
 
-  // Sign the protobuf SignDoc (DIRECT mode — no Amino JSON reconstruction issues)
+  // Simulate with fallback gas to get real estimate, then re-encode with actual gas + 30% buffer
+  const simAuthInfo = encodeAuthInfo(pubKeyBytes, sequence, 1, GAS_FALLBACK);
+  const gasUsed = await simulateGas(bodyBytes, simAuthInfo);
+  const gasLimit = gasUsed ? Math.ceil(gasUsed * GAS_MULTIPLIER) : GAS_FALLBACK;
+  const authInfoBytes = encodeAuthInfo(pubKeyBytes, sequence, 1, gasLimit);
+
   const signDocBytes = encodeSignDoc(bodyBytes, authInfoBytes, CHAIN_ID, accountNumber);
   const signDocHash = sha256(signDocBytes);
   const sigBytes = secp256k1.sign(signDocHash, privKey, { lowS: true }).toCompactRawBytes();
