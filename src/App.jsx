@@ -22,6 +22,7 @@ import {
   checkUsernameAvailability,
   getBalance,
   getMPCWallets,
+  getAccount,
   buildAndSign,
   broadcastTx,
   formatOST,
@@ -1341,7 +1342,13 @@ export default function App() {
     });
     // Restore init tx state so "Wallets not initialized" doesn't reappear after refresh
     const savedTx = localStorage.getItem(`init_tx_${entry.address}`);
-    if (savedTx) { setInitTxhash(savedTx); setInitStatus('done'); }
+    if (savedTx) {
+      setInitTxhash(savedTx); setInitStatus('done');
+    } else {
+      // Fallback: if account has sequence > 0, a tx was already sent
+      const { sequence } = await getAccount(entry.address);
+      if (sequence > 0) setInitStatus('done');
+    }
     setAuthState('unlocked');
   }, []);
 
