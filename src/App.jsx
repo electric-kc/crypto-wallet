@@ -1222,6 +1222,20 @@ export default function App() {
     }
   }, [onboardingStep]);
 
+  // Background poll for MPC wallets until all addresses are provisioned
+  useEffect(() => {
+    if (authState !== 'unlocked' || !wallet) return;
+    const allReady = MPC_CHAINS.every(c => wallet.mpcWallets?.[c.id]);
+    if (allReady) return;
+    const id = setInterval(async () => {
+      const mpcWallets = await getMPCWallets(wallet.address);
+      const nowReady = MPC_CHAINS.every(c => mpcWallets?.[c.id]);
+      setWallet(w => ({ ...w, mpcWallets }));
+      if (nowReady) clearInterval(id);
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [authState, wallet?.address, MPC_CHAINS.every(c => wallet?.mpcWallets?.[c.id])]);
+
   // Unlock handler
   const handleUnlock = useCallback(async (privKey) => {
     sessionPrivKey.current = privKey;
