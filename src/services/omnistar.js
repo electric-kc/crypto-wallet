@@ -198,13 +198,16 @@ function pbConcat(...arrays) {
   return out;
 }
 function pbStr(f, v) {
+  if (!v) return new Uint8Array(0); // proto3: omit default (empty string)
   const d = new TextEncoder().encode(v);
   return pbConcat(pbVarintEncode((f << 3) | 2), pbVarintEncode(d.length), d);
 }
 function pbByt(f, v) {
+  if (!v || v.length === 0) return new Uint8Array(0); // proto3: omit default (empty bytes)
   return pbConcat(pbVarintEncode((f << 3) | 2), pbVarintEncode(v.length), v);
 }
 function pbUint(f, v) {
+  if (v === 0) return new Uint8Array(0); // proto3: omit default (zero)
   return pbConcat(pbVarintEncode((f << 3) | 0), pbVarintEncode(v));
 }
 function pbMsg(f, v) { return pbByt(f, v); }
