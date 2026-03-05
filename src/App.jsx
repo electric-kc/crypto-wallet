@@ -416,9 +416,34 @@ const FundStep = ({ onNext, address }) => {
 };
 
 const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) => {
-  const [status, setStatus] = useState('idle'); // 'idle' | 'broadcasting' | 'success' | 'error'
+  const [status, setStatus] = useState('idle'); // 'idle' | 'broadcasting' | 'provisioning' | 'success' | 'error'
   const [errorMsg, setErrorMsg] = useState('');
   const [activeChains, setActiveChains] = useState([]);
+  const [pollCount, setPollCount] = useState(0);
+  const pollRef = useRef(null);
+
+  // Poll getMPCWallets every 30s after broadcast until all 9 addresses are present
+  useEffect(() => {
+    if (status !== 'provisioning') return;
+    const check = async () => {
+      const wallets = await getMPCWallets(address);
+      const chains = MPC_CHAINS.map(c => c.id);
+      const ready = chains.filter(id => wallets[id] && wallets[id].length > 0);
+      if (ready.length === chains.length) {
+        clearInterval(pollRef.current);
+        for (const id of ready) {
+          await new Promise(r => setTimeout(r, 300));
+          setActiveChains(prev => [...prev, id]);
+        }
+        setStatus('success');
+      } else {
+        setPollCount(n => n + 1);
+      }
+    };
+    check();
+    pollRef.current = setInterval(check, 30_000);
+    return () => clearInterval(pollRef.current);
+  }, [status, address]);
 
   const handleCreate = async () => {
     setStatus('broadcasting');
@@ -426,12 +451,7 @@ const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) =>
       const { signature } = await buildAndSign({ creator: address, username, pubKeyBase64, privKey });
       const result = await broadcastTx(signature);
       if (result.code !== 0) throw new Error(result.rawLog);
-      // Animate chains appearing one by one
-      for (let i = 0; i < MPC_CHAINS.length; i++) {
-        await new Promise(r => setTimeout(r, 300));
-        setActiveChains(prev => [...prev, MPC_CHAINS[i].id]);
-      }
-      setStatus('success');
+      setStatus('provisioning');
     } catch (e) {
       setErrorMsg(String(e));
       setStatus('error');
@@ -461,6 +481,12 @@ const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) =>
         })}
       </div>
 
+      {status === 'provisioning' && (
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-xs text-white/50 text-center">Transaction sent. Omnistar is provisioning your wallets…</p>
+          <p className="text-[10px] text-white/25">Checking every 30s · scan #{pollCount + 1}</p>
+        </div>
+      )}
       {status === 'error' && (
         <p className="text-xs text-red-400 px-1">{errorMsg || 'Transaction failed. Try again.'}</p>
       )}
@@ -475,12 +501,14 @@ const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) =>
           </button>
         ) : (
           <button
-            onClick={status === 'broadcasting' ? undefined : handleCreate}
-            disabled={status === 'broadcasting'}
-            className={`w-full py-4 rounded-2xl font-bold text-base transition-all ${status === 'broadcasting' ? 'bg-white/5 text-white/40' : 'bg-gradient-to-r from-[#6C63FF] to-[#A855F7] text-white shadow-lg shadow-purple-500/20 active:scale-[0.98]'}`}
+            onClick={status === 'broadcasting' || status === 'provisioning' ? undefined : handleCreate}
+            disabled={status === 'broadcasting' || status === 'provisioning'}
+            className={`w-full py-4 rounded-2xl font-bold text-base transition-all ${status === 'broadcasting' || status === 'provisioning' ? 'bg-white/5 text-white/40' : 'bg-gradient-to-r from-[#6C63FF] to-[#A855F7] text-white shadow-lg shadow-purple-500/20 active:scale-[0.98]'}`}
           >
             {status === 'broadcasting'
               ? <span className="flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> Broadcasting…</span>
+              : status === 'provisioning'
+              ? <span className="flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> Provisioning…</span>
               : status === 'error' ? 'Retry' : 'Create Wallets'}
           </button>
         )}
