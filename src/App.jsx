@@ -657,7 +657,7 @@ const TxHashRow = ({ txhash }) => {
 
 // ─── WALLET TAB ───────────────────────────────────────────────────────────────
 
-const WalletTab = ({ wallet, mpcLastChecked, onInitWallets, initStatus, initTxhash }) => {
+const WalletTab = ({ wallet, mpcLastChecked, onInitWallets, initStatus, initTxhash, initError }) => {
   const [activeSubTab, setActiveSubTab] = useState('TOKENS');
   const [sheet, setSheet] = useState(null);
   const [selectedChain, setSelectedChain] = useState(null);
@@ -761,7 +761,7 @@ const WalletTab = ({ wallet, mpcLastChecked, onInitWallets, initStatus, initTxha
               <p className="text-[11px] font-semibold text-yellow-300">Wallets not initialized</p>
             </div>
             <p className="text-[10px] text-white/40">The setup transaction was never sent. Tap below to broadcast it now.</p>
-            {initStatus === 'error' && <p className="text-[10px] text-red-400">Broadcast failed — check your connection and try again.</p>}
+            {initStatus === 'error' && <p className="text-[10px] text-red-400 break-all">{initError || 'Broadcast failed — check your connection.'}</p>}
             <button
               onClick={onInitWallets}
               className="w-full py-2.5 bg-gradient-to-r from-[#6C63FF] to-[#A855F7] rounded-xl font-bold text-xs text-white active:scale-[0.98] transition-transform"
@@ -1233,6 +1233,7 @@ export default function App() {
   const [mpcLastChecked, setMpcLastChecked] = useState(null);
   const [initStatus, setInitStatus] = useState('idle'); // 'idle' | 'broadcasting' | 'done' | 'error'
   const [initTxhash, setInitTxhash] = useState('');
+  const [initError, setInitError] = useState('');
 
   // Initialize: check for existing keystore
   useEffect(() => {
@@ -1375,7 +1376,9 @@ export default function App() {
       setInitTxhash(result.txhash || '');
       setInitStatus('done');
     } catch (e) {
+      console.error('[initWallets]', e);
       setInitTxhash('');
+      setInitError(String(e));
       setInitStatus('error');
     }
   }, [wallet]);
@@ -1427,7 +1430,7 @@ export default function App() {
       return (
         <>
           <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
-            {activeTab === 'wallet' && <WalletTab wallet={wallet} mpcLastChecked={mpcLastChecked} onInitWallets={handleInitWallets} initStatus={initStatus} initTxhash={initTxhash} />}
+            {activeTab === 'wallet' && <WalletTab wallet={wallet} mpcLastChecked={mpcLastChecked} onInitWallets={handleInitWallets} initStatus={initStatus} initTxhash={initTxhash} initError={initError} />}
             {activeTab === 'activity' && <ActivityTab />}
             {activeTab === 'dapps' && <DAppsTab />}
             {activeTab === 'profile' && <ProfileTab wallet={wallet} onLock={handleLock} onRemoveWallet={handleRemoveWallet} />}
