@@ -418,6 +418,8 @@ const FundStep = ({ onNext, address }) => {
 const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) => {
   const [status, setStatus] = useState('idle'); // 'idle' | 'broadcasting' | 'provisioning' | 'success' | 'error'
   const [errorMsg, setErrorMsg] = useState('');
+  const [txhash, setTxhash] = useState('');
+  const [hashCopied, setHashCopied] = useState(false);
   const [activeChains, setActiveChains] = useState([]);
   const [pollCount, setPollCount] = useState(0);
   const pollRef = useRef(null);
@@ -451,6 +453,7 @@ const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) =>
       const { signature } = await buildAndSign({ creator: address, username, pubKeyBase64, privKey });
       const result = await broadcastTx(signature);
       if (result.code !== 0) throw new Error(result.rawLog);
+      setTxhash(result.txhash || '');
       setStatus('provisioning');
     } catch (e) {
       setErrorMsg(String(e));
@@ -481,9 +484,21 @@ const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) =>
         })}
       </div>
 
+      {(status === 'provisioning' || status === 'success') && txhash && (
+        <div className="space-y-1">
+          <p className="text-[10px] text-white/30 text-center uppercase tracking-wider">Transaction hash</p>
+          <button
+            onClick={() => { navigator.clipboard.writeText(txhash).catch(() => {}); setHashCopied(true); setTimeout(() => setHashCopied(false), 2000); }}
+            className="w-full flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl active:bg-white/10"
+          >
+            <span className="flex-1 text-[10px] font-mono text-white/50 truncate">{txhash}</span>
+            <span className={`text-[10px] flex-shrink-0 ${hashCopied ? 'text-green-400' : 'text-white/30'}`}>{hashCopied ? '✓' : <Copy size={10} />}</span>
+          </button>
+        </div>
+      )}
       {status === 'provisioning' && (
         <div className="flex flex-col items-center gap-1">
-          <p className="text-xs text-white/50 text-center">Transaction sent. Omnistar is provisioning your wallets…</p>
+          <p className="text-xs text-white/50 text-center">Omnistar is provisioning your wallets…</p>
           <p className="text-[10px] text-white/25">Checking every 30s · scan #{pollCount + 1}</p>
         </div>
       )}
