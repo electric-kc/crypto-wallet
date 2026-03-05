@@ -194,29 +194,18 @@ export function signAmino(signDoc, privKey) {
 
 export async function broadcastTx(signedTx) {
   try {
-    const txJson = JSON.stringify(signedTx);
-    const txBase64 = btoa(txJson);
-    const body = JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'broadcast_tx_sync',
-      params: { tx: txBase64 },
-    });
-    const res = await fetch(`${RPC_URL}/`, {
+    // Use legacy Amino REST endpoint — accepts StdTx JSON directly, no protobuf needed
+    const res = await fetch(`${LCD_URL}/txs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body,
+      body: JSON.stringify({ tx: signedTx, mode: 'sync' }),
     });
-    if (res.ok) {
-      const data = await res.json();
-      const result = data?.result ?? {};
-      return {
-        code: result.code ?? 0,
-        txhash: result.hash ?? '',
-        rawLog: result.log ?? '',
-      };
-    }
-    return { code: 1, txhash: '', rawLog: `HTTP ${res.status}` };
+    const data = await res.json();
+    return {
+      code: data.code ?? 0,
+      txhash: data.txhash ?? '',
+      rawLog: data.raw_log ?? '',
+    };
   } catch (e) {
     return { code: 1, txhash: '', rawLog: String(e) };
   }
