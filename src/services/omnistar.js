@@ -180,6 +180,62 @@ export function buildCreateSafeTx(creator, username, pubKeyBase64, accountNumber
   };
 }
 
+// ─── Minimal protobuf encoder ────────────────────────────────────────────────
+
+function pbVarintEncode(n) {
+  const out = [];
+  while (n > 0x7f) { out.push((n & 0x7f) | 0x80); n = Math.floor(n / 128); }
+  out.push(n);
+  return new Uint8Array(out);
+}
+function pbConcat(...arrays) {
+  const len = arrays.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(len);
+  let off = 0;
+  for (const a of arrays) { out.set(a, off); off += a.length; }
+  return out;
+}
+function pbStr(f, v) {
+  const d = new TextEncoder().encode(v);
+  return pbConcat(pbVarintEncode((f << 3) | 2), pbVarintEncode(d.length), d);
+}
+function pbByt(f, v) {
+  return pbConcat(pbVarintEncode((f << 3) | 2), pbVarintEncode(v.length), v);
+}
+function pbUint(f, v) {
+  return pbConcat(pbVarintEncode((f << 3) | 0), pbVarintEncode(v));
+}
+function pbMsg(f, v) { return pbByt(f, v); }
+
+function encodeMsgCreateData(creator, destination, data) {
+  return pbConcat(pbStr(1, creator), pbStr(2, destination), pbStr(3, data));
+}
+function encodeAny(typeUrl, valueBytes) {
+  return pbConcat(pbStr(1, typeUrl), pbByt(2, valueBytes));
+}
+function encodeTxBody(msgs) {
+  let body = new Uint8Array();
+  for (const msg of msgs) {
+    const m = encodeMsgCreateData(msg.value.creator, msg.value.destination, msg.value.data);
+    body = pbConcat(body, pbMsg(1, encodeAny('/omnistar.MsgCreateData', m)));
+  }
+  return body;
+}
+function encodeAuthInfo(pubKeyBytes, sequence) {
+  // PubKey Any
+  const pk = pbConcat(pbStr(1, '/cosmos.crypto.secp256k1.PubKey'), pbByt(2, pbByt(1, pubKeyBytes)));
+  // ModeInfo { Single { mode = 127 (SIGN_MODE_LEGACY_AMINO_JSON) } }
+  const modeInfo = pbMsg(1, pbUint(1, 127));
+  // SignerInfo
+  const signerInfo = pbConcat(pbMsg(1, pk), pbMsg(2, modeInfo), pbUint(3, sequence));
+  // Fee { amount: [Coin{denom,amount}], gas_limit }
+  const coin = pbConcat(pbStr(1, FEE_DENOM), pbStr(2, FEE_AMOUNT));
+  const fee = pbConcat(pbMsg(1, coin), pbUint(2, parseInt(GAS, 10)));
+  return pbConcat(pbMsg(1, signerInfo), pbMsg(2, fee));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function signAmino(signDoc, privKey) {
   const canonical = JSON.stringify(sortObjectKeys(signDoc));
   const hash = sha256(new TextEncoder().encode(canonical));
@@ -192,19 +248,20 @@ export function signAmino(signDoc, privKey) {
   };
 }
 
-export async function broadcastTx(signedTx) {
+export async function broadcastTx(txBytes) {
   try {
-    // Use legacy Amino REST endpoint — accepts StdTx JSON directly, no protobuf needed
-    const res = await fetch(`${LCD_URL}/txs`, {
+    const txBase64 = btoa(String.fromCharCode(...txBytes));
+    const res = await fetch(`${RPC_URL}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tx: signedTx, mode: 'sync' }),
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'broadcast_tx_sync', params: { tx: txBase64 } }),
     });
     const data = await res.json();
+    const result = data?.result ?? {};
     return {
-      code: data.code ?? 0,
-      txhash: data.txhash ?? '',
-      rawLog: data.raw_log ?? '',
+      code: result.code ?? 0,
+      txhash: result.hash ?? '',
+      rawLog: result.log ?? '',
     };
   } catch (e) {
     return { code: 1, txhash: '', rawLog: String(e) };
@@ -214,23 +271,22 @@ export async function broadcastTx(signedTx) {
 export async function buildAndSign({ creator, username, pubKeyBase64, privKey }) {
   const { accountNumber, sequence } = await getAccount(creator);
   const signDoc = buildCreateSafeTx(creator, username, pubKeyBase64, accountNumber, sequence);
-  const { signature, pubKey } = signAmino(signDoc, privKey);
 
-  // Assemble StdTx (Amino broadcast format)
-  const signedTx = {
-    type: 'cosmos-sdk/StdTx',
-    value: {
-      msg: signDoc.msgs,
-      fee: signDoc.fee,
-      signatures: [{
-        pub_key: { type: 'tendermint/PubKeySecp256k1', value: pubKey },
-        signature,
-      }],
-      memo: signDoc.memo,
-    },
-  };
+  // Sign Amino JSON (SIGN_MODE_LEGACY_AMINO_JSON)
+  const sigBytes = (() => {
+    const canonical = JSON.stringify(sortObjectKeys(signDoc));
+    const hash = sha256(new TextEncoder().encode(canonical));
+    const sig = secp256k1.sign(hash, privKey, { lowS: true });
+    return sig.toCompactRawBytes();
+  })();
+  const pubKeyBytes = secp256k1.getPublicKey(privKey, true);
 
-  return { signDoc, signature: signedTx, pubKey };
+  // Build protobuf TxRaw for broadcast
+  const bodyBytes = encodeTxBody(signDoc.msgs);
+  const authInfoBytes = encodeAuthInfo(pubKeyBytes, sequence);
+  const txRaw = pbConcat(pbByt(1, bodyBytes), pbByt(2, authInfoBytes), pbByt(3, sigBytes));
+
+  return { signDoc, signature: txRaw, pubKey: btoa(String.fromCharCode(...pubKeyBytes)) };
 }
 
 export function formatOST(nost) {
