@@ -38,16 +38,18 @@ export async function checkUsernameAvailability(username) {
 export async function getAccount(address) {
   try {
     const res = await fetch(`${LCD_URL}/cosmos/auth/v1beta1/accounts/${encodeURIComponent(address)}`);
+    console.log('[getAccount] status:', res.status);
     if (res.ok) {
       const data = await res.json();
+      console.log('[getAccount] data:', JSON.stringify(data));
       const acc = data?.account;
       return {
         accountNumber: parseInt(acc?.account_number ?? '0', 10),
         sequence: parseInt(acc?.sequence ?? '0', 10),
       };
     }
-  } catch {
-    // LCD not reachable
+  } catch (e) {
+    console.error('[getAccount] error:', e);
   }
   return { accountNumber: 0, sequence: 0 };
 }
