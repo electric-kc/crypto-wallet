@@ -1,9 +1,11 @@
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
 
-export const CHAIN_ID = 'omnistar-1';
-export const RPC_URL = 'http://localhost:26657';
-export const API_SERVER_URL = 'http://localhost:3000';
+export const CHAIN_ID = 'omnistar';
+export const RPC_URL = 'http://prod-full-1.omnistar.io:26657';
+export const LCD_URL = 'http://prod-full-1.omnistar.io:1317';
+export const API_SERVER_URL = 'https://reverse-proxy.omnistar.io/mainnet/proxy';
+const API_KEY = 'nft.r@bit2safe.wikey.io';
 export const FEE_DENOM = 'nost';
 export const FEE_AMOUNT = '5000';
 export const GAS = '200000';
@@ -20,7 +22,9 @@ export function validateUsername(username) {
 
 export async function checkUsernameAvailability(username) {
   try {
-    const res = await fetch(`${API_SERVER_URL}/api/username/${encodeURIComponent(username)}`);
+    const res = await fetch(`${API_SERVER_URL}/api/username/${encodeURIComponent(username)}`, {
+      headers: { 'x-api-key': API_KEY },
+    });
     if (res.ok) {
       const data = await res.json();
       return { available: !data.exists, suggestion: data.suggestion };
@@ -33,38 +37,41 @@ export async function checkUsernameAvailability(username) {
 
 export async function getAccount(address) {
   try {
-    const res = await fetch(`${RPC_URL}/abci_query?path=%22/cosmos.auth.v1beta1.Query/Account%22&data=&height=0&prove=false`);
+    const res = await fetch(`${LCD_URL}/cosmos/auth/v1beta1/accounts/${encodeURIComponent(address)}`);
     if (res.ok) {
       const data = await res.json();
-      // Parse account number and sequence from response
-      const result = data?.result?.response;
-      if (result?.value) {
-        // Simplified decode - in production use protobuf decode
-        return { accountNumber: 0, sequence: 0 };
-      }
+      const acc = data?.account;
+      return {
+        accountNumber: parseInt(acc?.account_number ?? '0', 10),
+        sequence: parseInt(acc?.sequence ?? '0', 10),
+      };
     }
   } catch {
-    // RPC not reachable
+    // LCD not reachable
   }
   return { accountNumber: 0, sequence: 0 };
 }
 
 export async function getBalance(address) {
   try {
-    const res = await fetch(`${RPC_URL}/abci_query?path=%22/cosmos.bank.v1beta1.Query/Balance%22&data=&height=0&prove=false`);
+    const res = await fetch(`${LCD_URL}/cosmos/bank/v1beta1/balances/${encodeURIComponent(address)}`);
     if (res.ok) {
-      // Simplified – in production decode protobuf response
-      return { nost: '0', ost: '0.0000' };
+      const data = await res.json();
+      const nostEntry = (data?.balances ?? []).find(b => b.denom === 'nost');
+      const nost = nostEntry?.amount ?? '0';
+      return { nost, ost: formatOST(nost) };
     }
   } catch {
-    // RPC not reachable
+    // LCD not reachable
   }
   return { nost: '0', ost: '0.0000' };
 }
 
 export async function getMPCWallets(address) {
   try {
-    const res = await fetch(`${API_SERVER_URL}/api/safe/${encodeURIComponent(address)}/wallets`);
+    const res = await fetch(`${API_SERVER_URL}/api/safe/${encodeURIComponent(address)}/wallets`, {
+      headers: { 'x-api-key': API_KEY },
+    });
     if (res.ok) {
       return await res.json();
     }
@@ -185,15 +192,31 @@ export function signAmino(signDoc, privKey) {
   };
 }
 
-export async function broadcastTx(_signedTxData) {
+export async function broadcastTx(signedTx) {
   try {
-    // In production: encode as TxRaw protobuf and POST to /broadcast_tx_sync
-    // For now: mocked response
-    return {
-      code: 0,
-      txhash: 'MOCK_' + Math.random().toString(36).slice(2).toUpperCase(),
-      rawLog: 'mock broadcast success',
-    };
+    const txJson = JSON.stringify(signedTx);
+    const txBase64 = btoa(txJson);
+    const body = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'broadcast_tx_sync',
+      params: { tx: txBase64 },
+    });
+    const res = await fetch(`${RPC_URL}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const result = data?.result ?? {};
+      return {
+        code: result.code ?? 0,
+        txhash: result.hash ?? '',
+        rawLog: result.log ?? '',
+      };
+    }
+    return { code: 1, txhash: '', rawLog: `HTTP ${res.status}` };
   } catch (e) {
     return { code: 1, txhash: '', rawLog: String(e) };
   }
@@ -203,7 +226,22 @@ export async function buildAndSign({ creator, username, pubKeyBase64, privKey })
   const { accountNumber, sequence } = await getAccount(creator);
   const signDoc = buildCreateSafeTx(creator, username, pubKeyBase64, accountNumber, sequence);
   const { signature, pubKey } = signAmino(signDoc, privKey);
-  return { signDoc, signature, pubKey };
+
+  // Assemble StdTx (Amino broadcast format)
+  const signedTx = {
+    type: 'cosmos-sdk/StdTx',
+    value: {
+      msg: signDoc.msgs,
+      fee: signDoc.fee,
+      signatures: [{
+        pub_key: { type: 'tendermint/PubKeySecp256k1', value: pubKey },
+        signature,
+      }],
+      memo: signDoc.memo,
+    },
+  };
+
+  return { signDoc, signature: signedTx, pubKey };
 }
 
 export function formatOST(nost) {
