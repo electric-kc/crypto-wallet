@@ -217,7 +217,7 @@ function encodeTxBody(msgs) {
   let body = new Uint8Array();
   for (const msg of msgs) {
     const m = encodeMsgCreateData(msg.value.creator, msg.value.destination, msg.value.data);
-    body = pbConcat(body, pbMsg(1, encodeAny('/omnistar.MsgCreateData', m)));
+    body = pbConcat(body, pbMsg(1, encodeAny('/omnistar.omnistar.MsgCreateData', m)));
   }
   return body;
 }
