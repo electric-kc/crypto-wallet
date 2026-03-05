@@ -804,7 +804,8 @@ const WalletTab = ({ wallet, mpcLastChecked, onInitWallets, initStatus, initTxha
         {activeSubTab === 'TOKENS' ? (
           MPC_CHAINS.map((chain) => {
             const mpcAddr = wallet.mpcWallets?.[chain.id] || '';
-            const shortMpc = mpcAddr ? mpcAddr.slice(0, 8) + '…' + mpcAddr.slice(-4) : 'Pending…';
+            const hasAddr = !!mpcAddr;
+            const shortMpc = hasAddr ? mpcAddr.slice(0, 6) + '…' + mpcAddr.slice(-4) : null;
             const fiat = fiatValue(chain.coinGeckoId, 0);
             return (
               <GlassCard
@@ -816,12 +817,16 @@ const WalletTab = ({ wallet, mpcLastChecked, onInitWallets, initStatus, initTxha
                   {chain.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="font-bold text-white">{chain.name}</span>
                     <span className="font-bold text-white">0.0000 {chain.symbol}</span>
                   </div>
-                  <div className="flex justify-between text-xs font-medium mt-0.5">
-                    <span className="text-white/30 font-mono text-[9px] truncate max-w-[120px]">{shortMpc}</span>
+                  <div className="flex justify-between items-center text-xs font-medium mt-0.5">
+                    {hasAddr ? (
+                      <span className="text-emerald-400 font-mono text-[10px]">{shortMpc}</span>
+                    ) : (
+                      <span className="text-white/25 text-[10px] italic">Provisioning…</span>
+                    )}
                     <span className="text-white/40">$0.00</span>
                   </div>
                 </div>
@@ -1334,6 +1339,9 @@ export default function App() {
       mpcWallets,
       ostBalance: balance.ost,
     });
+    // Restore init tx state so "Wallets not initialized" doesn't reappear after refresh
+    const savedTx = localStorage.getItem(`init_tx_${entry.address}`);
+    if (savedTx) { setInitTxhash(savedTx); setInitStatus('done'); }
     setAuthState('unlocked');
   }, []);
 
@@ -1373,8 +1381,17 @@ export default function App() {
       });
       const result = await broadcastTx(signature);
       if (result.code !== 0) throw new Error(result.rawLog);
-      setInitTxhash(result.txhash || '');
+      const txhash = result.txhash || '';
+      setInitTxhash(txhash);
       setInitStatus('done');
+      if (txhash && wallet?.address) {
+        localStorage.setItem(`init_tx_${wallet.address}`, txhash);
+      }
+      // Trigger immediate wallet poll
+      getMPCWallets(wallet.address).then(mpcWallets => {
+        setMpcLastChecked(new Date());
+        setWallet(w => ({ ...w, mpcWallets }));
+      });
     } catch (e) {
       console.error('[initWallets]', e);
       setInitTxhash('');
