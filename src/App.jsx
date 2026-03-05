@@ -419,7 +419,6 @@ const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) =>
   const [status, setStatus] = useState('idle'); // 'idle' | 'broadcasting' | 'provisioning' | 'success' | 'error'
   const [errorMsg, setErrorMsg] = useState('');
   const [txhash, setTxhash] = useState('');
-  const [hashCopied, setHashCopied] = useState(false);
   const [activeChains, setActiveChains] = useState([]);
   const [pollCount, setPollCount] = useState(0);
   const pollRef = useRef(null);
@@ -485,16 +484,7 @@ const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) =>
       </div>
 
       {(status === 'provisioning' || status === 'success') && txhash && (
-        <div className="space-y-1">
-          <p className="text-[10px] text-white/30 text-center uppercase tracking-wider">Transaction hash</p>
-          <button
-            onClick={() => { navigator.clipboard.writeText(txhash).catch(() => {}); setHashCopied(true); setTimeout(() => setHashCopied(false), 2000); }}
-            className="w-full flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl active:bg-white/10"
-          >
-            <span className="flex-1 text-[10px] font-mono text-white/50 truncate">{txhash}</span>
-            <span className={`text-[10px] flex-shrink-0 ${hashCopied ? 'text-green-400' : 'text-white/30'}`}>{hashCopied ? '✓' : <Copy size={10} />}</span>
-          </button>
-        </div>
+        <TxHashRow txhash={txhash} />
       )}
       {status === 'provisioning' && (
         <div className="flex flex-col items-center gap-1">
@@ -651,9 +641,23 @@ const LockScreen = ({ keystoreEntry, onUnlock }) => {
   );
 };
 
+const TxHashRow = ({ txhash }) => {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(txhash).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      className="w-full flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl active:bg-white/10"
+    >
+      <span className="text-[9px] text-white/30 uppercase tracking-wider flex-shrink-0">TX</span>
+      <span className="flex-1 text-[10px] font-mono text-white/50 truncate">{txhash}</span>
+      <span className={`text-[10px] flex-shrink-0 ${copied ? 'text-green-400' : 'text-white/30'}`}>{copied ? '✓' : <Copy size={10} />}</span>
+    </button>
+  );
+};
+
 // ─── WALLET TAB ───────────────────────────────────────────────────────────────
 
-const WalletTab = ({ wallet, mpcLastChecked }) => {
+const WalletTab = ({ wallet, mpcLastChecked, onInitWallets, initStatus, initTxhash }) => {
   const [activeSubTab, setActiveSubTab] = useState('TOKENS');
   const [sheet, setSheet] = useState(null);
   const [selectedChain, setSelectedChain] = useState(null);
@@ -743,22 +747,57 @@ const WalletTab = ({ wallet, mpcLastChecked }) => {
       </div>
 
       {/* MPC provisioning status */}
-      {!MPC_CHAINS.every(c => wallet.mpcWallets?.[c.id]) && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-2xl">
-          <Loader size={12} className="animate-spin text-purple-400 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-semibold text-purple-300">Provisioning MPC wallets…</p>
-            <p className="text-[10px] text-white/30">
-              {mpcLastChecked
-                ? `Last checked ${Math.round((Date.now() - mpcLastChecked) / 1000)}s ago · next in ${Math.max(0, 30 - Math.round((Date.now() - mpcLastChecked) / 1000))}s`
-                : 'Checking…'}
-            </p>
+      {(() => {
+        const ready = MPC_CHAINS.filter(c => wallet.mpcWallets?.[c.id]).length;
+        const total = MPC_CHAINS.length;
+        if (ready === total) return null;
+
+        // No wallets at all + tx never sent (or errored) → show init button
+        const needsInit = ready === 0 && (initStatus === 'idle' || initStatus === 'error');
+        if (needsInit) return (
+          <div className="space-y-2 px-4 py-3 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={14} className="text-yellow-400 flex-shrink-0" />
+              <p className="text-[11px] font-semibold text-yellow-300">Wallets not initialized</p>
+            </div>
+            <p className="text-[10px] text-white/40">The setup transaction was never sent. Tap below to broadcast it now.</p>
+            {initStatus === 'error' && <p className="text-[10px] text-red-400">Broadcast failed — check your connection and try again.</p>}
+            <button
+              onClick={onInitWallets}
+              className="w-full py-2.5 bg-gradient-to-r from-[#6C63FF] to-[#A855F7] rounded-xl font-bold text-xs text-white active:scale-[0.98] transition-transform"
+            >
+              Initialize Wallets
+            </button>
           </div>
-          <span className="text-[10px] text-white/20 flex-shrink-0">
-            {MPC_CHAINS.filter(c => wallet.mpcWallets?.[c.id]).length}/{MPC_CHAINS.length}
-          </span>
-        </div>
-      )}
+        );
+
+        // Tx sent (broadcasting, done, or provisioning) → show progress
+        return (
+          <div className="space-y-2">
+            {initStatus === 'broadcasting' && (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-2xl">
+                <Loader size={12} className="animate-spin text-purple-400 flex-shrink-0" />
+                <p className="text-[11px] text-purple-300">Broadcasting transaction…</p>
+              </div>
+            )}
+            {initTxhash ? (
+              <TxHashRow txhash={initTxhash} />
+            ) : null}
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-2xl">
+              <Loader size={12} className="animate-spin text-purple-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-purple-300">Provisioning MPC wallets…</p>
+                <p className="text-[10px] text-white/30">
+                  {mpcLastChecked
+                    ? `Last checked ${Math.round((Date.now() - mpcLastChecked) / 1000)}s ago · next in ${Math.max(0, 30 - Math.round((Date.now() - mpcLastChecked) / 1000))}s`
+                    : 'Checking…'}
+                </p>
+              </div>
+              <span className="text-[10px] text-white/20 flex-shrink-0">{ready}/{total}</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Content */}
       <div className="space-y-3">
@@ -1192,6 +1231,8 @@ export default function App() {
   const sessionPrivKey = useRef(null);
   const [activeTab, setActiveTab] = useState('wallet');
   const [mpcLastChecked, setMpcLastChecked] = useState(null);
+  const [initStatus, setInitStatus] = useState('idle'); // 'idle' | 'broadcasting' | 'done' | 'error'
+  const [initTxhash, setInitTxhash] = useState('');
 
   // Initialize: check for existing keystore
   useEffect(() => {
@@ -1318,6 +1359,27 @@ export default function App() {
     }
   }, [authState]);
 
+  // Failsafe: re-broadcast Create Safe from main wallet if it was never sent
+  const handleInitWallets = useCallback(async () => {
+    if (!wallet || !sessionPrivKey.current) return;
+    setInitStatus('broadcasting');
+    try {
+      const { signature } = await buildAndSign({
+        creator: wallet.address,
+        username: wallet.username,
+        pubKeyBase64: wallet.pubKeyBase64,
+        privKey: sessionPrivKey.current,
+      });
+      const result = await broadcastTx(signature);
+      if (result.code !== 0) throw new Error(result.rawLog);
+      setInitTxhash(result.txhash || '');
+      setInitStatus('done');
+    } catch (e) {
+      setInitTxhash('');
+      setInitStatus('error');
+    }
+  }, [wallet]);
+
   // ─── Render ───
 
   const renderContent = () => {
@@ -1365,7 +1427,7 @@ export default function App() {
       return (
         <>
           <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
-            {activeTab === 'wallet' && <WalletTab wallet={wallet} mpcLastChecked={mpcLastChecked} />}
+            {activeTab === 'wallet' && <WalletTab wallet={wallet} mpcLastChecked={mpcLastChecked} onInitWallets={handleInitWallets} initStatus={initStatus} initTxhash={initTxhash} />}
             {activeTab === 'activity' && <ActivityTab />}
             {activeTab === 'dapps' && <DAppsTab />}
             {activeTab === 'profile' && <ProfileTab wallet={wallet} onLock={handleLock} onRemoveWallet={handleRemoveWallet} />}
