@@ -456,6 +456,7 @@ const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) =>
       const result = await broadcastTx(signature);
       if (result.code !== 0) throw new Error(result.rawLog);
       setTxhash(result.txhash || '');
+      registerUsername(username, address); // best-effort, don't await
       setStatus('provisioning');
     } catch (e) {
       setErrorMsg(String(e));
