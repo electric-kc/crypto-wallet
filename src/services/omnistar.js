@@ -2,8 +2,8 @@ import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
 
 export const CHAIN_ID = 'omnistar';
-export const RPC_URL = 'http://prod-full-1.omnistar.io:26657';
-export const LCD_URL = 'http://prod-full-1.omnistar.io:1317';
+export const RPC_URL = '/rpc';
+export const LCD_URL = '/lcd';
 export const API_SERVER_URL = 'https://reverse-proxy.omnistar.io/mainnet/proxy';
 export const SNAPSHOT_URL = 'https://reverse-proxy.omnistar.io/mainnet/node';
 const API_KEY = 'nft.r@bit2safe.wikey.io';

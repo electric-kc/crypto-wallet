@@ -8,4 +8,10 @@ export default defineConfig({
     target: 'esnext',
     sourcemap: false,
   },
+  server: {
+    proxy: {
+      '/lcd': { target: 'http://prod-full-1.omnistar.io:1317', rewrite: (path) => path.replace(/^\/lcd/, '') },
+      '/rpc': { target: 'http://prod-full-1.omnistar.io:26657', rewrite: (path) => path.replace(/^\/rpc/, '') },
+    },
+  },
 })
