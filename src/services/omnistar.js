@@ -320,17 +320,17 @@ export function signAmino(signDoc, privKey) {
 export async function broadcastTx(txBytes) {
   try {
     const txBase64 = btoa(String.fromCharCode(...txBytes));
-    const res = await fetch(`${RPC_URL}`, {
+    const res = await fetch(`${LCD_URL}/cosmos/tx/v1beta1/txs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'broadcast_tx_sync', params: { tx: txBase64 } }),
+      body: JSON.stringify({ tx_bytes: txBase64, mode: 'BROADCAST_MODE_SYNC' }),
     });
     const data = await res.json();
-    const result = data?.result ?? {};
+    const result = data?.tx_response ?? {};
     return {
       code: result.code ?? 0,
-      txhash: result.hash ?? '',
-      rawLog: result.log ?? '',
+      txhash: result.txhash ?? '',
+      rawLog: result.raw_log ?? '',
     };
   } catch (e) {
     return { code: 1, txhash: '', rawLog: String(e) };
