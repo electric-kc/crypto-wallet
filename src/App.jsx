@@ -1313,7 +1313,7 @@ export default function App() {
 
   // Background poll for MPC wallets until all addresses are provisioned
   useEffect(() => {
-    if (authState !== 'unlocked' || !wallet) return;
+    if (authState !== 'unlocked' || !wallet || initStatus !== 'done') return;
     const allReady = MPC_CHAINS.every(c => wallet.mpcWallets?.[c.id]);
     if (allReady) return;
     const poll = async () => {
@@ -1324,15 +1324,24 @@ export default function App() {
     poll(); // check immediately on mount
     const id = setInterval(poll, 30_000);
     return () => clearInterval(id);
-  }, [authState, wallet?.address, MPC_CHAINS.every(c => wallet?.mpcWallets?.[c.id])]);
+  }, [authState, initStatus, wallet?.address, MPC_CHAINS.every(c => wallet?.mpcWallets?.[c.id])]);
 
   // Unlock handler
   const handleUnlock = useCallback(async (privKey) => {
     sessionPrivKey.current = privKey;
     const entry = await loadKeystore();
     if (!entry) return;
-    const mpcWallets = await getMPCWallets(entry.address);
     const balance = await getBalance(entry.address);
+
+    // Check if safe was already created before fetching MPC wallets
+    const savedTx = localStorage.getItem(`init_tx_${entry.address}`);
+    let safeCreated = !!savedTx;
+    if (!safeCreated) {
+      const { sequence } = await getAccount(entry.address);
+      safeCreated = sequence > 0;
+    }
+
+    const mpcWallets = safeCreated ? await getMPCWallets(entry.address) : {};
     setWallet({
       address: entry.address,
       username: entry.username,
@@ -1343,13 +1352,10 @@ export default function App() {
       ostBalance: balance.ost,
     });
     // Restore init tx state so "Wallets not initialized" doesn't reappear after refresh
-    const savedTx = localStorage.getItem(`init_tx_${entry.address}`);
     if (savedTx) {
       setInitTxhash(savedTx); setInitStatus('done');
-    } else {
-      // Fallback: if account has sequence > 0, a tx was already sent
-      const { sequence } = await getAccount(entry.address);
-      if (sequence > 0) setInitStatus('done');
+    } else if (safeCreated) {
+      setInitStatus('done');
     }
     setAuthState('unlocked');
   }, []);
