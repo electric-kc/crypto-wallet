@@ -20,8 +20,10 @@ import {
 import {
   validateUsername,
   checkUsernameAvailability,
+  registerUsername,
   getBalance,
   getMPCWallets,
+  getAssetBalances,
   getAccount,
   buildAndSign,
   broadcastTx,
@@ -1394,6 +1396,8 @@ export default function App() {
       if (txhash && wallet?.address) {
         localStorage.setItem(`init_tx_${wallet.address}`, txhash);
       }
+      // Register username with API server (best-effort)
+      registerUsername(wallet.username, wallet.address);
       // Trigger immediate wallet poll
       getMPCWallets(wallet.address).then(mpcWallets => {
         setMpcLastChecked(new Date());

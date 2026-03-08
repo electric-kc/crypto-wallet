@@ -5,7 +5,9 @@ export const CHAIN_ID = 'omnistar';
 export const RPC_URL = 'http://prod-full-1.omnistar.io:26657';
 export const LCD_URL = 'http://prod-full-1.omnistar.io:1317';
 export const API_SERVER_URL = 'https://reverse-proxy.omnistar.io/mainnet/proxy';
+export const SNAPSHOT_URL = 'https://reverse-proxy.omnistar.io/mainnet/node';
 const API_KEY = 'nft.r@bit2safe.wikey.io';
+const API_HEADERS = { 'Content-Type': 'application/json', 'api-key': API_KEY, 'env': 'main' };
 export const FEE_DENOM = 'nost';
 export const GAS_PRICE = 11; // nost per gas unit
 export const GAS_FALLBACK = 300000; // used if simulation fails
@@ -23,17 +25,30 @@ export function validateUsername(username) {
 
 export async function checkUsernameAvailability(username) {
   try {
-    const res = await fetch(`${API_SERVER_URL}/api/username/${encodeURIComponent(username)}`, {
-      headers: { 'x-api-key': API_KEY },
+    const res = await fetch(`${API_SERVER_URL}/users/accounts/getAccountByName/?accountName=${encodeURIComponent(username)}`, {
+      headers: API_HEADERS,
     });
     if (res.ok) {
       const data = await res.json();
-      return { available: !data.exists, suggestion: data.suggestion };
+      return { available: !data.public_key, suggestion: `${username}_${Math.floor(Math.random() * 1000)}` };
     }
+    if (res.status === 404) return { available: true };
   } catch {
     // API not reachable – treat as available for now
   }
   return { available: true };
+}
+
+export async function registerUsername(username, address) {
+  try {
+    await fetch(`${API_SERVER_URL}/users/accounts/createAccount`, {
+      method: 'POST',
+      headers: API_HEADERS,
+      body: JSON.stringify({ displayName: username, name: username, address, env: 'mainnet', name_source: 'wallet-cli' }),
+    });
+  } catch {
+    // best-effort
+  }
 }
 
 export async function getAccount(address) {
@@ -70,27 +85,48 @@ export async function getBalance(address) {
 
 export async function getMPCWallets(address) {
   try {
-    const res = await fetch(`${API_SERVER_URL}/api/safe/${encodeURIComponent(address)}/wallets`, {
-      headers: { 'x-api-key': API_KEY },
-    });
+    const res = await fetch(`${SNAPSHOT_URL}/snapshot/client?env=main&publickey=${encodeURIComponent(address)}`);
     if (res.ok) {
-      return await res.json();
+      const snapshots = await res.json();
+      const assets = snapshots?.[0]?.assets?.assets ?? [];
+      const wallets = {};
+      for (const a of assets) {
+        wallets[a.symbol] = a.address;
+      }
+      return wallets;
     }
   } catch {
     // API not reachable
   }
-  // Return mock placeholder addresses
-  return {
-    BTC: '',
-    ETH: '',
-    XRP: '',
-    SOL: '',
-    AVAX: '',
-    DOGE: '',
-    SHIB: '',
-    ADA: '',
-    BASE: '',
-  };
+  return {};
+}
+
+export async function getAssetBalances(address) {
+  try {
+    const snapRes = await fetch(`${SNAPSHOT_URL}/snapshot/client?env=main&publickey=${encodeURIComponent(address)}`);
+    if (!snapRes.ok) return [];
+    const snapshots = await snapRes.json();
+    const safeAddress = snapshots?.[0]?.address;
+    const assets = snapshots?.[0]?.assets?.assets ?? [];
+    if (!assets.length) return [];
+
+    const res = await fetch(`${API_SERVER_URL}/api/assets/`, {
+      method: 'POST',
+      headers: API_HEADERS,
+      body: JSON.stringify({
+        assets: assets.map(a => ({ symbol: a.symbol, address: a.address })),
+        safe_address: safeAddress,
+        isMain: 'true',
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.assets ?? [];
+    }
+  } catch {
+    // API not reachable
+  }
+  return [];
 }
 
 export function buildCreateSafeTx(creator, username, pubKeyBase64, accountNumber, sequence) {
@@ -175,7 +211,7 @@ export function buildCreateSafeTx(creator, username, pubKeyBase64, accountNumber
     chain_id: CHAIN_ID,
     account_number: String(accountNumber),
     sequence: String(sequence),
-    fee: { amount: [{ denom: FEE_DENOM, amount: FEE_AMOUNT }], gas: GAS },
+    fee: { amount: [{ denom: FEE_DENOM, amount: String(GAS_FALLBACK * GAS_PRICE) }], gas: String(GAS_FALLBACK) },
     msgs,
     memo: '',
   };
