@@ -9,6 +9,8 @@
   ],
   "rewrites": [
     { "source": "/lcd/:path*", "destination": "http://prod-full-1.omnistar.io:1317/:path*" },
-    { "source": "/rpc/:path*", "destination": "http://prod-full-1.omnistar.io:26657/:path*" }
+    { "source": "/lcd", "destination": "http://prod-full-1.omnistar.io:1317/" },
+    { "source": "/rpc/:path*", "destination": "http://prod-full-1.omnistar.io:26657/:path*" },
+    { "source": "/rpc", "destination": "http://prod-full-1.omnistar.io:26657/" }
   ]
 }
