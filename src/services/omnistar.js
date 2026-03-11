@@ -1,7 +1,5 @@
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { sha256 } from '@noble/hashes/sha256';
-
 export const CHAIN_ID = 'omnistar';
+export const BRIDGE_URL = 'http://127.0.0.1:8081';
 export const RPC_URL = '/rpc';
 export const LCD_URL = '/lcd';
 export const API_SERVER_URL = 'https://reverse-proxy.omnistar.io/mainnet/proxy';
@@ -305,16 +303,17 @@ function encodeSignDoc(bodyBytes, authInfoBytes, chainId, accountNumber) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function signAmino(signDoc, privKey) {
+export async function signAmino(signDoc) {
   const canonical = JSON.stringify(sortObjectKeys(signDoc));
-  const hash = sha256(new TextEncoder().encode(canonical));
-  const sig = secp256k1.sign(hash, privKey, { lowS: true });
-  const sigBytes = sig.toCompactRawBytes();
-  const pubKeyBytes = secp256k1.getPublicKey(privKey, true);
-  return {
-    signature: btoa(String.fromCharCode(...sigBytes)),
-    pubKey: btoa(String.fromCharCode(...pubKeyBytes)),
-  };
+  const preimageBytes = new TextEncoder().encode(canonical);
+  const preimage = Array.from(preimageBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const res = await fetch(`${BRIDGE_URL}/sign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestId: 'signAmino', preimage }),
+  });
+  if (!res.ok) throw new Error(`Bridge sign failed: ${res.status}`);
+  return res.json(); // { signature, pubKey }
 }
 
 export async function broadcastTx(txBytes) {
@@ -337,11 +336,16 @@ export async function broadcastTx(txBytes) {
   }
 }
 
-export async function buildAndSign({ creator, username, pubKeyBase64, privKey }) {
+export async function buildAndSign({ creator, username }) {
   const { accountNumber, sequence } = await getAccount(creator);
-  const signDoc = buildCreateSafeTx(creator, username, pubKeyBase64, accountNumber, sequence);
 
-  const pubKeyBytes = secp256k1.getPublicKey(privKey, true);
+  // Get pubKey from bridge (SSP controls the signing key)
+  const pkRes = await fetch(`${BRIDGE_URL}/pubkey`);
+  if (!pkRes.ok) throw new Error('Bridge unreachable: cannot get pubKey');
+  const { pubKey: pubKeyBase64 } = await pkRes.json();
+  const pubKeyBytes = Uint8Array.from(atob(pubKeyBase64), c => c.charCodeAt(0));
+
+  const signDoc = buildCreateSafeTx(creator, username, pubKeyBase64, accountNumber, sequence);
   const bodyBytes = encodeTxBody(signDoc.msgs);
 
   // Simulate with fallback gas to get real estimate, then re-encode with actual gas + 30% buffer
@@ -351,11 +355,19 @@ export async function buildAndSign({ creator, username, pubKeyBase64, privKey })
   const authInfoBytes = encodeAuthInfo(pubKeyBytes, sequence, 1, gasLimit);
 
   const signDocBytes = encodeSignDoc(bodyBytes, authInfoBytes, CHAIN_ID, accountNumber);
-  const signDocHash = sha256(signDocBytes);
-  const sigBytes = secp256k1.sign(signDocHash, privKey, { lowS: true }).toCompactRawBytes();
-  const txRaw = pbConcat(pbByt(1, bodyBytes), pbByt(2, authInfoBytes), pbByt(3, sigBytes));
+  const preimage = Array.from(signDocBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
-  return { signDoc, signature: txRaw, pubKey: btoa(String.fromCharCode(...pubKeyBytes)) };
+  const signRes = await fetch(`${BRIDGE_URL}/sign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestId: 'buildAndSign', preimage }),
+  });
+  if (!signRes.ok) throw new Error(`Bridge sign failed: ${signRes.status}`);
+  const { signature: sigBase64 } = await signRes.json();
+  const sigBytes = Uint8Array.from(atob(sigBase64), c => c.charCodeAt(0));
+
+  const txRaw = pbConcat(pbByt(1, bodyBytes), pbByt(2, authInfoBytes), pbByt(3, sigBytes));
+  return { signDoc, signature: txRaw, pubKey: pubKeyBase64 };
 }
 
 export function formatOST(nost) {

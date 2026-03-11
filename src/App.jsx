@@ -418,7 +418,7 @@ const FundStep = ({ onNext, address }) => {
   );
 };
 
-const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) => {
+const CreateSafeStep = ({ onNext, username, address }) => {
   const [status, setStatus] = useState('idle'); // 'idle' | 'broadcasting' | 'provisioning' | 'success' | 'error'
   const [errorMsg, setErrorMsg] = useState('');
   const [txhash, setTxhash] = useState('');
@@ -452,7 +452,7 @@ const CreateSafeStep = ({ onNext, username, address, pubKeyBase64, privKey }) =>
   const handleCreate = async () => {
     setStatus('broadcasting');
     try {
-      const { signature } = await buildAndSign({ creator: address, username, pubKeyBase64, privKey });
+      const { signature } = await buildAndSign({ creator: address, username });
       const result = await broadcastTx(signature);
       if (result.code !== 0) throw new Error(result.rawLog);
       setTxhash(result.txhash || '');
@@ -1386,14 +1386,12 @@ export default function App() {
 
   // Failsafe: re-broadcast Create Safe from main wallet if it was never sent
   const handleInitWallets = useCallback(async () => {
-    if (!wallet || !sessionPrivKey.current) return;
+    if (!wallet) return;
     setInitStatus('broadcasting');
     try {
       const { signature } = await buildAndSign({
         creator: wallet.address,
         username: wallet.username,
-        pubKeyBase64: wallet.pubKeyBase64,
-        privKey: sessionPrivKey.current,
       });
       const result = await broadcastTx(signature);
       if (result.code !== 0) throw new Error(result.rawLog);
@@ -1440,7 +1438,6 @@ export default function App() {
             username={pending.username}
             address={pending.address}
             pubKeyBase64={pending.pubKeyBase64}
-            privKey={sessionPrivKey.current}
           />
         );
       }

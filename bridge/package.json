@@ -1,0 +1,10 @@
+{
+  "name": "ssp-bridge",
+  "version": "1.0.0",
+  "description": "Local bridge between browser wallet and SSP signing process",
+  "main": "server.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
